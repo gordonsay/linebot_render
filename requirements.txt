@@ -73,5 +73,5 @@ playwright
 playwright-stealth
 cloudscraper
 uvicorn
-wikipediaapi
+wikipedia-api==0.8.1
 
