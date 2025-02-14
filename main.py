@@ -1602,36 +1602,35 @@ def get_video_data_newest():
         context = browser.new_context()
         page = context.new_page()
 
-        # ✅ 使用 Stealth 技術來減少被封鎖風險
+        # ✅ 啟用 Stealth 模式
+        stealth_sync(page)
+
+        # ✅ 變更 User-Agent 以模擬真實瀏覽器
         page.set_extra_http_headers({
-            "User-Agent": random.choice([
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2 like Mac OS X) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Mobile Safari/537.36",
-            ])
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
         })
 
-        # ✅ 進入頁面並等待內容載入
-        page.goto(url, timeout=20000)  # 增加超時時間
-        page.wait_for_load_state("networkidle")  # 確保所有資源載入完成
-        
-        try:
-            page.wait_for_selector(".video-img-box", timeout=7000)  # 增加等待時間
-        except:
-            print("❌ [ERROR] 找不到 .video-img-box，可能是網頁結構變更或載入過慢")
-            print("✅ [DEBUG] 頁面內容:\n", page.content())  # Debug HTML 結構
+        # ✅ 設定 Cookie 允許 JS 運行
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+
+        # ✅ 瀏覽網頁並等待完全加載
+        page.goto(url, timeout=30000)
+        page.wait_for_load_state("networkidle")  # 等待 JS 加載完成
+
+        # ✅ 檢查是否仍然卡在驗證頁面
+        if "Verifying you are human" in page.content():
+            print("❌ Cloudflare 人機驗證擋住爬蟲，請改用手動 Cookie 或其他方法")
             browser.close()
             return []
 
-        # ✅ 爬取影片標題 & 連結
+        # ✅ 抓取影片資訊
         videos = page.query_selector_all('.video-img-box')
-
         video_list = []
+
         for video in videos[:3]:  # 取前三個影片
             title_elem = video.query_selector('.title a')
-
             title = title_elem.text_content().strip() if title_elem else "N/A"
             link = title_elem.get_attribute('href') if title_elem else "N/A"
-
             video_list.append({"title": title, "link": link})
 
         browser.close()
