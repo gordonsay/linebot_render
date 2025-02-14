@@ -1356,13 +1356,13 @@ def search_person_info(name):
         print(f"📢 [DEBUG] 維基百科查詢成功: {wiki_content}")
 
         # 當名稱對應到多個條目時，要求提供更多關鍵字
-        if "可能是下列" in wiki_content or "可能指" in wiki_content:
+        if "可能是下列" in wiki_content or "可能指" in wiki_content or "可以指" in wiki_content:
             return f"找到多個關聯條目，請提供更多關鍵字以精確查詢：\n{wiki_content[:200]}...", f"{BASE_URL}/static/blackquest.jpg"
 
         ai_prompt = f"請根據以下資料介紹 {name} 是誰，並以簡單的 3-4 句話概述。\n\n維基百科內容:\n{wiki_content}"
     else:
         print(f"❌ [DEBUG] 維基百科無結果，改用 AI 生成")
-        ai_prompt = f"請你提供一個簡單{name} 的介紹（3-4 句話），確保回答是基於真實資訊，避免猜測。當資訊不足請註明於開頭:「AI自動產生」。"
+        ai_prompt = f"請你提供一個簡單{name} 的介紹（3-4 句話），確保回答是基於真實資訊。請一定註明於開頭:「AI Generate」。"
 
     # 2️⃣ **丟給 AI 處理**
     response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b")
@@ -1373,7 +1373,9 @@ def search_person_info(name):
     headers = {"User-Agent": "Mozilla/5.0"}
     google_response = requests.get(google_url, headers=headers)
 
-    if google_response.status_code == 200:
+    if "AI" in response_text or "Generate" in response_text :
+        image_url = f"{BASE_URL}/static/blackquest.jpg"
+    elif google_response.status_code == 200:
         soup = BeautifulSoup(google_response.text, "html.parser")
         images = soup.find_all("img")
         image_url = images[1]["src"] if len(images) > 1 else f"{BASE_URL}/static/blackquest.jpg"  # 預設圖片
