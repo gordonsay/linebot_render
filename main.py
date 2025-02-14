@@ -1341,46 +1341,46 @@ def google_search(query):
 
     return search_results if search_results else None
 
-def search_person_info(name):
-    """查詢維基百科，若無則提示 AI，並從 Google 搜尋圖片"""
+def validate_wikipedia_keyword(name):
+    """檢查 AI 建議的關鍵字是否真的有 Wikipedia 頁面"""
+    wiki = wikipediaapi.Wikipedia(user_agent="MyLineBot/1.0", language="zh")
+    page = wiki.page(name)
+    return page.exists()
 
-    # 1️⃣ **查詢維基百科**
-    wiki_wiki = wikipediaapi.Wikipedia(
-        user_agent="MyLineBot/1.0 (Contact: a0983828539@gmail.com)",  
-        language="zh"
-    )
+def search_person_info(name):
+    """查詢維基百科，若無則提示 AI，並根據情境選擇 Google 或預設圖片"""
+
+    wiki_wiki = wikipediaapi.Wikipedia(user_agent="MyLineBot/1.0", language="zh")
     page = wiki_wiki.page(name)
 
     if page.exists():
-        wiki_content = page.summary[:500]  # 擷取前 500 個字
-        print(f"📢 [DEBUG] 維基百科查詢成功: {wiki_content}")
+        wiki_content = page.summary[:500]  # 取前 500 字
+        print(f"📢 [DEBUG] 維基百科查詢成功: {wiki_content[:50]}...")
 
-        # 當名稱對應到多個條目時，要求提供更多關鍵字
+        # 若有歧義條目，要求提供更多關鍵字，並使用預設圖片
         if "可能是下列" in wiki_content or "可能指" in wiki_content or "可以指" in wiki_content:
-            return f"找到多個關聯條目，請提供更多關鍵字以精確查詢：\n{wiki_content[:200]}...", f"{BASE_URL}/static/blackquest.jpg"
+            return f"找到多個相關條目，請提供更精確的關鍵字：\n{wiki_content[:200]}...", f"{BASE_URL}/static/blackquest.jpg"
 
-        ai_prompt = f"請根據以下資料介紹 {name} 是誰，並以簡單的 3-4 句話概述。\n\n維基百科內容:\n{wiki_content}"
+        # 使用 Google 搜尋圖片
+        image_url = search_google_image(name)
+
+        # 讓 AI 產生簡要回覆
+        ai_prompt = f"請用 3-4 句話簡述 {name} 是誰。\n\n維基百科內容:\n{wiki_content}"
     else:
-        print(f"❌ [DEBUG] 維基百科無結果，改用 AI 生成")
-        ai_prompt = f"請你依據關鍵字:{name}, 推測此關鍵字可能是想詢問什麼問題。請一定註明於開頭回覆:「AI Auto Reply」。"
+        print(f"❌ [DEBUG] 維基百科無結果，嘗試 AI 推測可能的查詢詞")
 
-    # 2️⃣ **丟給 AI 處理**
+        # 讓 AI 猜測正確關鍵字（但要確保 Wikipedia 上有該條目）
+        correction_prompt = f"使用者查詢 '{name}'，請提供一個在 Wikipedia 上確實存在的條目名稱，並確保查詢時可找到對應內容。如果沒有合理結果，請回應『找不到合適結果』。"
+        suggested_keyword = ask_groq(correction_prompt, "deepseek-r1-distill-llama-70b")
+
+        if "找不到" in suggested_keyword or not validate_wikipedia_keyword(suggested_keyword):
+            return "找不到合適結果，請提供更具體的關鍵字。", f"{BASE_URL}/static/blackquest.jpg"
+
+        return f"你是想問「{suggested_keyword}」嗎？", f"{BASE_URL}/static/blackquest.jpg"
+
+    # **2️⃣ AI 生成回應**
     response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b")
-    print(f"📢 [DEBUG] AI 回應: {response_text}")
-
-    # 3️⃣ **Google 圖片搜尋**
-    google_url = f"https://www.google.com/search?q={name}&tbm=isch"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    google_response = requests.get(google_url, headers=headers)
-
-    if "ai" in response_text.lower() or "auto" in response_text.lower() or "reply" in response_text.lower():
-        image_url = f"{BASE_URL}/static/blackquest.jpg"
-    elif google_response.status_code == 200:
-        soup = BeautifulSoup(google_response.text, "html.parser")
-        images = soup.find_all("img")
-        image_url = images[1]["src"] if len(images) > 1 else f"{BASE_URL}/static/blackquest.jpg"  # 預設圖片
-    else:
-        image_url = f"{BASE_URL}/static/blackquest.jpg"
+    print(f"📢 [DEBUG] AI 回應: {response_text[:50]}...")
 
     return response_text, image_url
 
