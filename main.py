@@ -665,7 +665,7 @@ def handle_message(event):
                 messages=[TextMessage(text=response_text)]
             )
         else:
-            flex_message = create_flex_jable_message(videos)  # ✅ 生成 FlexMessage
+            flex_message = create_flex_jable_message_nopic(videos)  # ✅ 生成 FlexMessage
                 
             if flex_message is None:  # **確保 flex_message 不為 None**
                 print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
@@ -1591,6 +1591,7 @@ def get_video_data_hotest():
 
 def get_video_data_newest():
     url = "https://jable.tv/latest-updates/"
+
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
@@ -1599,36 +1600,51 @@ def get_video_data_newest():
         context = browser.new_context()
         page = context.new_page()
 
-        # ✅ 避免被封鎖，使用 Stealth
-        stealth_sync(page)
+        # ✅ 使用 Stealth 技術來減少被封鎖風險
+        page.set_extra_http_headers({
+            "User-Agent": random.choice([
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2 like Mac OS X) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Mobile Safari/537.36",
+            ])
+        })
 
-        # ✅ 隨機 User-Agent
-        user_agents = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2 like Mac OS X) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Mobile Safari/537.36",
-        ]
-        page.set_extra_http_headers({"User-Agent": random.choice(user_agents)})
+        # ✅ 進入頁面並等待內容載入
+        page.goto(url, timeout=20000)  # 增加超時時間
+        page.wait_for_load_state("networkidle")  # 確保所有資源載入完成
+        
+        try:
+            page.wait_for_selector(".video-img-box", timeout=7000)  # 增加等待時間
+        except:
+            print("❌ [ERROR] 找不到 .video-img-box，可能是網頁結構變更或載入過慢")
+            print("✅ [DEBUG] 頁面內容:\n", page.content())  # Debug HTML 結構
+            browser.close()
+            return []
 
-        # ✅ **降低等待時間**
-        page.goto(url, timeout=20000)  # **減少超時時間**
-        page.wait_for_selector(".video-img-box", timeout=5000)  # **減少 selector 等待時間**
-
-        # ✅ **直接解析 HTML，不用 set_content()**
+        # ✅ 爬取影片標題 & 連結
         videos = page.query_selector_all('.video-img-box')
 
         video_list = []
-        for video in videos[:3]:  # **取前三個影片**
-            title_elem, img_elem = video.query_selector('.title a'), video.query_selector('.img-box img')
+        for video in videos[:3]:  # 取前三個影片
+            title_elem = video.query_selector('.title a')
 
             title = title_elem.text_content().strip() if title_elem else "N/A"
             link = title_elem.get_attribute('href') if title_elem else "N/A"
-            thumbnail = img_elem.get_attribute('data-src') or img_elem.get_attribute('src') if img_elem else "N/A"
 
-            video_list.append({"title": title, "link": link, "thumbnail": thumbnail})
+            video_list.append({"title": title, "link": link})
 
-        # ✅ **減少記憶體佔用**
         browser.close()
         return video_list
+
+def create_flex_jable_message_nopic(videos):
+    if not videos:
+        return TextMessage(text="找不到相關影片，請嘗試其他關鍵字。")
+
+    # 格式化影片資訊，標題 + 影片網址
+    message_text = "🔥 最新影片 🔥\n\n"
+    for video in videos:
+        message_text += f"🎬 {video['title']}\n🔗 {video['link']}\n\n"
+
+    return TextMessage(text=message_text.strip())  # 去掉最後的換行符號
 
 
 def create_flex_jable_message(videos):
