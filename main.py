@@ -18,6 +18,8 @@ from spotipy.oauth2 import SpotifyClientCredentials
 from playwright.sync_api import sync_playwright
 from playwright_stealth import stealth_sync
 import cloudscraper
+import wikipediaapi
+
 
 # Load Environment Arguments
 load_dotenv()
@@ -1340,12 +1342,26 @@ def google_search(query):
     return search_results if search_results else None
 
 def search_person_info(name):
-    """使用 AI 生成人物簡介，並搭配 Google 圖片搜尋"""
-    # 透過 AI 生成簡單描述
-    prompt = f"請用簡單的方式介紹 {name} 是誰，並以 3-4 句話概述。"
-    response_text = ask_groq(prompt, "deepseek-r1-distill-llama-70b")  # 調用 AI 來回答
+    """查詢維基百科，若無則提示 AI，並從 Google 搜尋圖片"""
 
-    # 進行 Google 圖片搜尋
+    # 1️⃣ **查詢維基百科**
+    wiki_wiki = wikipediaapi.Wikipedia("zh")  # 使用中文維基百科
+    page = wiki_wiki.page(name)
+
+    if page.exists():
+        wiki_content = page.summary[:500]  # 擷取前 500 個字
+        print(f"📢 [DEBUG] 維基百科查詢成功: {wiki_content}")
+        ai_prompt = f"請根據以下資料介紹 {name} 是誰，並以簡單的 3-4 句話概述。\n\n維基百科內容:\n{wiki_content}"
+    else:
+        print(f"❌ [DEBUG] 維基百科無結果，改用 AI 生成")
+        wiki_content = "找不到相關的維基百科資料。"
+        ai_prompt = f"請你提供一個簡單{name} 的介紹（3-4 句話），確保回答是基於真實資訊，避免猜測。當資訊不足直接回覆資料來源不足, 可信度僅供參考"
+
+    # 2️⃣ **丟給 AI 處理**
+    response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b")
+    print(f"📢 [DEBUG] AI 回應: {response_text}")
+
+    # 3️⃣ **Google 圖片搜尋**
     google_url = f"https://www.google.com/search?q={name}&tbm=isch"
     headers = {"User-Agent": "Mozilla/5.0"}
     google_response = requests.get(google_url, headers=headers)
@@ -1358,6 +1374,7 @@ def search_person_info(name):
         image_url = None
 
     return response_text, image_url
+
 
 def create_flex_message(text, image_url):
     if not image_url or not image_url.startswith("http"):
