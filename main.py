@@ -1345,7 +1345,10 @@ def search_person_info(name):
     """查詢維基百科，若無則提示 AI，並從 Google 搜尋圖片"""
 
     # 1️⃣ **查詢維基百科**
-    wiki_wiki = wikipediaapi.Wikipedia("zh")  # 使用中文維基百科
+    wiki_wiki = wikipediaapi.Wikipedia(
+        user_agent="MyLineBot/1.0 (Contact: a0983828539@gamil.com)",  
+        language="zh"
+    )
     page = wiki_wiki.page(name)
 
     if page.exists():
