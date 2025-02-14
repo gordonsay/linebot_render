@@ -685,52 +685,62 @@ def handle_message(event):
         return 
 
     # (4-n)「高登幫查」
-    if user_message == "高登幫查":
+    if user_message.startswith("高登幫查"):  # 確保指令匹配
         search_query = user_message.replace("高登幫查", "").strip()
+        
+        print(f"📢 [DEBUG] 指令『高登幫查』被觸發，查詢關鍵字: {search_query}")
+
         # 🚀 轉發請求到本機爬蟲伺服器（ngrok）
         try:
+            print(f"📢 [DEBUG] 發送請求到: {NGROK_URL}/crawl")  # 🔍 確保 NGROK_URL 正確
+
             response = requests.post(
                 f"{NGROK_URL}/crawl",
                 json={"search_query": search_query},  # 傳遞關鍵字
                 timeout=10
             )
-            result = response.json()
-            print(response, result)
 
-            if "videos" in result and result["videos"]:  # 確保 videos 存在且不為空
-                videos = result["videos"]
+            print(f"📢 [DEBUG] API 回應狀態碼: {response.status_code}")  # 🔍 檢查 HTTP 回應
+            if response.status_code == 200:
+                result = response.json()
+                print(f"📢 [DEBUG] API 回應內容: {result}")  # 🔍 檢查 API 回應 JSON
+
+                videos = result.get("videos", [])  # 確保 videos 存在
             else:
-                videos = []  # 確保 videos 不會未定義
+                print(f"❌ [ERROR] API 回應錯誤: {response.status_code}")
+                videos = []
 
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             print(f"❌ [ERROR] 無法請求本機爬蟲 API: {e}")
-            videos = []  # 確保 videos 不會未定義
+            videos = []
 
         if not videos:
-                print("❌ [DEBUG] 爬取結果為空，回傳純文字訊息")
+            print("❌ [DEBUG] 爬取結果為空，回傳純文字訊息")
+            response_text = "找不到相關影片。"
+            reply_request = ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=response_text)]
+            )
+        else:
+            flex_message = create_flex_jable_message(videos)  # ✅ 生成 FlexMessage
+
+            if flex_message is None:
+                print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
                 response_text = "找不到相關影片。"
                 reply_request = ReplyMessageRequest(
                     reply_token=event.reply_token,
                     messages=[TextMessage(text=response_text)]
                 )
-        else:
-                flex_message = create_flex_jable_message(videos)  # ✅ 生成 FlexMessage
-                
-                if flex_message is None:  # **確保 flex_message 不為 None**
-                    print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
-                    response_text = "找不到相關影片。"
-                    reply_request = ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(text=response_text)]
-                    )
-                else:
-                    # print(f"✅ [DEBUG] 生成的 FlexMessage: {flex_message}")
-                    reply_request = ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=[flex_message]
-                    )
-        send_response(event, reply_request)  
-        return  
+            else:
+                print(f"✅ [DEBUG] 成功生成 FlexMessage: {flex_message}")  # 🔍 確保 FlexMessage 正確
+                reply_request = ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[flex_message]
+                )
+
+        send_response(event, reply_request)
+        return
+
     
     # (4-q)「狗蛋推片」
     if user_message == "狗蛋推片":
@@ -749,23 +759,24 @@ def handle_message(event):
             print(f"❌ [ERROR] 無法請求本機爬蟲 API: {e}")
             videos = []  # 確保 videos 不會未定義
 
-        if "videos" in result:
-            video_list = result["videos"]
-            message_text = "🔥 推薦影片 🔥\n\n"
-            for video in video_list:
-                message_text += f"🎬 {video['title']}\n🔗 {video['link']}\n\n"
+        if not videos:
+            print("❌ [DEBUG] 爬取結果為空，回傳純文字訊息")
+            response_text = "找不到相關影片。"
+            reply_request = ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=response_text)]
+            )
         else:
-            message_text = "❌ 無法獲取影片資料"
-        flex_message = create_flex_jable_message(videos)  # ✅ 生成 FlexMessage
+            flex_message = create_flex_jable_message(videos)  # ✅ 生成 FlexMessage
                 
-        if flex_message is None:  # **確保 flex_message 不為 None**
+            if flex_message is None:  # **確保 flex_message 不為 None**
                 print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
                 response_text = "找不到相關影片。"
                 reply_request = ReplyMessageRequest(
                     reply_token=event.reply_token,
                     messages=[TextMessage(text=response_text)]
                 )
-        else:
+            else:
                 # print(f"✅ [DEBUG] 生成的 FlexMessage: {flex_message}")
                 reply_request = ReplyMessageRequest(
                     reply_token=event.reply_token,
