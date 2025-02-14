@@ -1520,6 +1520,7 @@ def get_video_data(search_query):
 
         # ✅ **減少 `timeout` 時間，提升速度**
         page.goto(url, timeout=10000)  # **減少超時時間**
+        page.wait_for_load_state("networkidle")  # 確保所有資源載入完成
         page.wait_for_selector(".video-img-box", timeout=3000)  # **減少等待時間**
         
         # ✅ **直接解析 HTML，不用 `set_content()`**
@@ -1570,6 +1571,7 @@ def get_video_data_hotest():
 
         # ✅ **降低等待時間**
         page.goto(url, timeout=20000)  # **減少超時時間**
+        page.wait_for_load_state("networkidle")  # 確保所有資源載入完成
         page.wait_for_selector(".video-img-box", timeout=5000)  # **減少 selector 等待時間**
 
         # ✅ **直接解析 HTML，不用 set_content()**
