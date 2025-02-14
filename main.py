@@ -39,6 +39,7 @@ CWB_API_URL = "https://opendata.cwb.gov.tw/api/v1/rest/datastore/F-D0047-091"
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 OPENWEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
 BASE_URL = "https://render-linebot-masp.onrender.com"
+NGROK_URL = os.getenv("NGROK_URL")
 
 # 初始化 Spotipy
 spotify_auth = SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET)
@@ -683,6 +684,42 @@ def handle_message(event):
         send_response(event, reply_request)  
         return 
 
+    # (4-n)「高登幫查」
+    if user_message == "高登幫查":
+        # 🚀 轉發請求到本機爬蟲伺服器（ngrok）
+        response = requests.post(f"{NGROK_URL}/crawl", json={})
+        result = response.json()
+
+        if "videos" in result:
+            video_list = result["videos"]
+            message_text = "🔥 最新影片 🔥\n\n"
+            for video in video_list:
+                message_text += f"🎬 {video['title']}\n🔗 {video['link']}\n\n"
+        else:
+            message_text = "❌ 無法獲取影片資料"
+
+        # 🚀 回傳給使用者
+        reply_message = ReplyMessageRequest(
+            reply_token=event.reply_token,
+            messages=[TextMessage(text=message_text.strip())]
+        )
+        flex_message = create_flex_jable_message_nopic(videos)  # ✅ 生成 FlexMessage
+        if flex_message is None:  # **確保 flex_message 不為 None**
+                print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
+                response_text = "找不到相關影片。"
+                reply_request = ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=response_text)]
+                )
+        else:
+                # print(f"✅ [DEBUG] 生成的 FlexMessage: {flex_message}")
+                reply_request = ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[flex_message]
+                )
+        send_response(event, reply_request)  
+        return 
+        
 
     # (5) 若在群組中且訊息中不包含「狗蛋」，則不觸發 AI 回應
     if event.source.type == "group" and "狗蛋" not in user_message:
