@@ -1379,14 +1379,14 @@ def search_person_info(name):
             return f"找到多個相關條目，請提供更精確的關鍵字：\n{wiki_content[:200]}...", f"{BASE_URL}/static/blackquest.jpg"
 
         image_url = search_google_image(name)
-        ai_prompt = f"請用 3-4 句話簡述 {name} 是誰。\n\n維基百科內容:\n{wiki_content}"
+        ai_prompt = f"請用 4-5 句話介紹 {name} 是誰。\n\n維基百科內容:\n{wiki_content}, 限制使用繁體中文回答"
 
     else:
         print(f"❌ [DEBUG] 維基百科無結果，嘗試 Wikidata")
         entity_id, entity_url = search_wikidata(name)
 
         if entity_id:
-            ai_prompt = f"請簡要介紹 {name} 是誰，參考 Wikidata 資訊：{entity_url}"
+            ai_prompt = f"請用 4-5 句話介紹 {name} 是誰，參考 Wikidata 資訊：{entity_url}, 限制使用繁體中文回答"
             response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b")
             return response_text, entity_url
 
