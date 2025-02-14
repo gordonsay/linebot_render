@@ -687,8 +687,19 @@ def handle_message(event):
     # (4-n)「高登幫查」
     if user_message == "高登幫查":
         # 🚀 轉發請求到本機爬蟲伺服器（ngrok）
-        response = requests.post(f"{NGROK_URL}/crawl", json={})
-        result = response.json()
+        try:
+            response = requests.post(f"{NGROK_URL}/crawl", json={}, timeout=10)  # 增加超時處理
+            result = response.json()
+            print(response, result)
+
+            if "videos" in result and result["videos"]:  # 確保 videos 存在且不為空
+                videos = result["videos"]
+            else:
+                videos = []  # 確保 videos 不會未定義
+
+        except Exception as e:
+            print(f"❌ [ERROR] 無法請求本機爬蟲 API: {e}")
+            videos = []  # 確保 videos 不會未定義
 
         if "videos" in result:
             video_list = result["videos"]
@@ -697,12 +708,6 @@ def handle_message(event):
                 message_text += f"🎬 {video['title']}\n🔗 {video['link']}\n\n"
         else:
             message_text = "❌ 無法獲取影片資料"
-
-        # # 🚀 回傳給使用者
-        # reply_message = ReplyMessageRequest(
-        #     reply_token=event.reply_token,
-        #     messages=[TextMessage(text=message_text.strip())]
-        # )
         flex_message = create_flex_jable_message_nopic(videos)  # ✅ 生成 FlexMessage
         if flex_message is None:  # **確保 flex_message 不為 None**
                 print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
