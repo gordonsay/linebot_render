@@ -1362,7 +1362,7 @@ def search_person_info(name):
         ai_prompt = f"請根據以下資料介紹 {name} 是誰，並以簡單的 3-4 句話概述。\n\n維基百科內容:\n{wiki_content}"
     else:
         print(f"❌ [DEBUG] 維基百科無結果，改用 AI 生成")
-        ai_prompt = f"請你提供一個簡單{name} 的介紹（3-4 句話），確保回答是基於真實資訊。請一定註明於開頭:「AI Generate」。"
+        ai_prompt = f"請你依據關鍵字:{name}, 推測此關鍵字可能是想詢問什麼問題。請一定註明於開頭回覆:「AI Auto Reply」。"
 
     # 2️⃣ **丟給 AI 處理**
     response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b")
@@ -1373,7 +1373,7 @@ def search_person_info(name):
     headers = {"User-Agent": "Mozilla/5.0"}
     google_response = requests.get(google_url, headers=headers)
 
-    if "AI" in response_text or "Generate" in response_text :
+    if "ai" in response_text.lower() or "auto" in response_text.lower() or "reply" in response_text.lower():
         image_url = f"{BASE_URL}/static/blackquest.jpg"
     elif google_response.status_code == 200:
         soup = BeautifulSoup(google_response.text, "html.parser")
