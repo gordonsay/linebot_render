@@ -686,9 +686,57 @@ def handle_message(event):
 
     # (4-n)「高登幫查」
     if user_message == "高登幫查":
+        search_query = user_message.replace("高登幫查", "").strip()
         # 🚀 轉發請求到本機爬蟲伺服器（ngrok）
         try:
-            response = requests.post(f"{NGROK_URL}/crawl", json={}, timeout=10)  # 增加超時處理
+            response = requests.post(
+                f"{NGROK_URL}/crawl",
+                json={"search_query": search_query},  # 傳遞關鍵字
+                timeout=10
+            )
+            result = response.json()
+            print(response, result)
+
+            if "videos" in result and result["videos"]:  # 確保 videos 存在且不為空
+                videos = result["videos"]
+            else:
+                videos = []  # 確保 videos 不會未定義
+
+        except Exception as e:
+            print(f"❌ [ERROR] 無法請求本機爬蟲 API: {e}")
+            videos = []  # 確保 videos 不會未定義
+
+        if not videos:
+                print("❌ [DEBUG] 爬取結果為空，回傳純文字訊息")
+                response_text = "找不到相關影片。"
+                reply_request = ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=response_text)]
+                )
+        else:
+                flex_message = create_flex_jable_message(videos)  # ✅ 生成 FlexMessage
+                
+                if flex_message is None:  # **確保 flex_message 不為 None**
+                    print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
+                    response_text = "找不到相關影片。"
+                    reply_request = ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=response_text)]
+                    )
+                else:
+                    # print(f"✅ [DEBUG] 生成的 FlexMessage: {flex_message}")
+                    reply_request = ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[flex_message]
+                    )
+        send_response(event, reply_request)  
+        return  
+    
+    # (4-q)「狗蛋推片」
+    if user_message == "狗蛋推片":
+        # 🚀 轉發請求到本機爬蟲伺服器（ngrok）
+        try:
+            response = requests.post(f"{NGROK_URL}/crawlpromot", json={}, timeout=10)  # 增加超時處理
             result = response.json()
             print(response, result)
 
@@ -703,12 +751,13 @@ def handle_message(event):
 
         if "videos" in result:
             video_list = result["videos"]
-            message_text = "🔥 最新影片 🔥\n\n"
+            message_text = "🔥 推薦影片 🔥\n\n"
             for video in video_list:
                 message_text += f"🎬 {video['title']}\n🔗 {video['link']}\n\n"
         else:
             message_text = "❌ 無法獲取影片資料"
-        flex_message = create_flex_jable_message_nopic(videos)  # ✅ 生成 FlexMessage
+        flex_message = create_flex_jable_message(videos)  # ✅ 生成 FlexMessage
+                
         if flex_message is None:  # **確保 flex_message 不為 None**
                 print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
                 response_text = "找不到相關影片。"
@@ -723,8 +772,7 @@ def handle_message(event):
                     messages=[flex_message]
                 )
         send_response(event, reply_request)  
-        return 
-        
+        return  
 
     # (5) 若在群組中且訊息中不包含「狗蛋」，則不觸發 AI 回應
     if event.source.type == "group" and "狗蛋" not in user_message:
