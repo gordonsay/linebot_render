@@ -41,6 +41,7 @@ CWB_API_URL = "https://opendata.cwb.gov.tw/api/v1/rest/datastore/F-D0047-091"
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 OPENWEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
 BASE_URL = "https://render-linebot-masp.onrender.com"
+WIKIDATA_API_URL = "https://www.wikidata.org/w/api.php"
 NGROK_URL = os.getenv("NGROK_URL")
 
 # 初始化 Spotipy
@@ -1347,8 +1348,25 @@ def validate_wikipedia_keyword(name):
     page = wiki.page(name)
     return page.exists()
 
+def search_wikidata(name):
+    """查詢 Wikidata，回傳摘要內容"""
+    params = {
+        "action": "wbsearchentities",
+        "search": name,
+        "language": "zh",
+        "format": "json"
+    }
+    response = requests.get(WIKIDATA_API_URL, params=params)
+    data = response.json()
+
+    if "search" in data and data["search"]:
+        entity_id = data["search"][0]["id"]  # 取第一個結果
+        entity_url = f"https://www.wikidata.org/wiki/{entity_id}"
+        return entity_id, entity_url
+    return None, None
+
 def search_person_info(name):
-    """查詢維基百科，若無則提示 AI，並根據情境選擇 Google 或預設圖片"""
+    """查詢維基百科，若無則查 Wikidata，最後讓 AI 生成回應"""
 
     wiki_wiki = wikipediaapi.Wikipedia(user_agent="MyLineBot/1.0", language="zh")
     page = wiki_wiki.page(name)
@@ -1357,20 +1375,23 @@ def search_person_info(name):
         wiki_content = page.summary[:500]  # 取前 500 字
         print(f"📢 [DEBUG] 維基百科查詢成功: {wiki_content[:50]}...")
 
-        # 若有歧義條目，要求提供更多關鍵字，並使用預設圖片
         if "可能是下列" in wiki_content or "可能指" in wiki_content or "可以指" in wiki_content:
             return f"找到多個相關條目，請提供更精確的關鍵字：\n{wiki_content[:200]}...", f"{BASE_URL}/static/blackquest.jpg"
 
-        # 使用 Google 搜尋圖片
         image_url = search_google_image(name)
-
-        # 讓 AI 產生簡要回覆
         ai_prompt = f"請用 3-4 句話簡述 {name} 是誰。\n\n維基百科內容:\n{wiki_content}"
-    else:
-        print(f"❌ [DEBUG] 維基百科無結果，嘗試 AI 推測可能的查詢詞")
 
-        # 讓 AI 猜測正確關鍵字（但要確保 Wikipedia 上有該條目）
-        correction_prompt = f"使用者查詢 '{name}'，請提供一個在 Wikipedia 上確實存在的條目名稱，並確保查詢時可找到對應內容。如果沒有合理結果，請回應『找不到合適結果』。"
+    else:
+        print(f"❌ [DEBUG] 維基百科無結果，嘗試 Wikidata")
+        entity_id, entity_url = search_wikidata(name)
+
+        if entity_id:
+            ai_prompt = f"請簡要介紹 {name} 是誰，參考 Wikidata 資訊：{entity_url}"
+            response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b")
+            return response_text, entity_url
+
+        print(f"❌ [DEBUG] Wikidata 也無結果，改用 AI 猜測")
+        correction_prompt = f"使用者查詢 '{name}'，請提供一個在 Wikipedia 或 Wikidata 上確實存在的條目名稱，若無合理結果，請回應『找不到合適結果』。"
         suggested_keyword = ask_groq(correction_prompt, "deepseek-r1-distill-llama-70b")
 
         if "找不到" in suggested_keyword or not validate_wikipedia_keyword(suggested_keyword):
@@ -1378,7 +1399,6 @@ def search_person_info(name):
 
         return f"你是想問「{suggested_keyword}」嗎？", f"{BASE_URL}/static/blackquest.jpg"
 
-    # **2️⃣ AI 生成回應**
     response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b")
     print(f"📢 [DEBUG] AI 回應: {response_text[:50]}...")
 
