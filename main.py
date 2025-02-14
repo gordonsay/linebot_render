@@ -343,7 +343,7 @@ def handle_message(event):
             "2. 狗蛋出去: 機器人離開群組\n"
             "3. 當前模型: 機器人現正使用的模型\n"
             "4. 狗蛋生成: 生成圖片\n"
-            "5. 狗蛋介紹: 人物或角色的說明--小心查證 \n"
+            "5. 狗蛋介紹: 人物或角色的說明\n\t\t (僅供參考) \n"
             "6. 狗蛋搜圖: 即時搜圖\n"
             "7. 狗蛋唱歌: 串連Spotify試聽\n"
             "8. 狗蛋氣象: 確認當前天氣\n"
@@ -1346,7 +1346,7 @@ def search_person_info(name):
 
     # 1️⃣ **查詢維基百科**
     wiki_wiki = wikipediaapi.Wikipedia(
-        user_agent="MyLineBot/1.0 (Contact: a0983828539@gamil.com)",  
+        user_agent="MyLineBot/1.0 (Contact: a0983828539@gmail.com)",  
         language="zh"
     )
     page = wiki_wiki.page(name)
@@ -1354,11 +1354,15 @@ def search_person_info(name):
     if page.exists():
         wiki_content = page.summary[:500]  # 擷取前 500 個字
         print(f"📢 [DEBUG] 維基百科查詢成功: {wiki_content}")
+
+        # 當名稱對應到多個條目時，要求提供更多關鍵字
+        if "可能是下列" in wiki_content or "可能指" in wiki_content:
+            return f"找到多個關聯條目，請提供更多關鍵字以精確查詢：\n{wiki_content[:200]}...", f"{BASE_URL}/static/blackquest.jpg"
+
         ai_prompt = f"請根據以下資料介紹 {name} 是誰，並以簡單的 3-4 句話概述。\n\n維基百科內容:\n{wiki_content}"
     else:
         print(f"❌ [DEBUG] 維基百科無結果，改用 AI 生成")
-        wiki_content = "找不到相關的維基百科資料。"
-        ai_prompt = f"請你提供一個簡單{name} 的介紹（3-4 句話），確保回答是基於真實資訊，避免猜測。當資訊不足直接回覆資料來源不足, 可信度僅供參考"
+        ai_prompt = f"請你提供一個簡單{name} 的介紹（3-4 句話），確保回答是基於真實資訊，避免猜測。當資訊不足請註明於開頭:「AI自動產生」。"
 
     # 2️⃣ **丟給 AI 處理**
     response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b")
@@ -1372,12 +1376,11 @@ def search_person_info(name):
     if google_response.status_code == 200:
         soup = BeautifulSoup(google_response.text, "html.parser")
         images = soup.find_all("img")
-        image_url = images[1]["src"] if len(images) > 1 else None  # 選擇第一張圖片
+        image_url = images[1]["src"] if len(images) > 1 else f"{BASE_URL}/static/blackquest.jpg"  # 預設圖片
     else:
-        image_url = None
+        image_url = f"{BASE_URL}/static/blackquest.jpg"
 
     return response_text, image_url
-
 
 def create_flex_message(text, image_url):
     if not image_url or not image_url.startswith("http"):
