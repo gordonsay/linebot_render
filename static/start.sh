@@ -10,5 +10,5 @@ pip install -r requirements.txt
 # 安裝 Playwright 的 Chromium 瀏覽器
 python -m playwright install chromium
 
-# 啟動應用（請根據你的應用修改這行）
-gunicorn -b 0.0.0.0:8000 main:app
+# 啟動 Flask 應用
+gunicorn -b 0.0.0.0:$PORT main:app
