@@ -1,25 +1,19 @@
-import os, re, json, openai, random, time, requests, shutil, datetime
+import os, re, json, openai, random, time, requests, shutil, datetime, wikipediaapi, spotipy
 from pydub import AudioSegment
 from flask import Flask, request, jsonify
 from linebot.exceptions import InvalidSignatureError
 from linebot.v3.messaging import MessagingApi, Configuration, ApiClient
 from linebot.v3.webhooks import MessageEvent, PostbackEvent, FollowEvent
 from linebot.v3.messaging.models import ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer, ImageMessage, PushMessageRequest
-from linebot.v3.webhooks.models import TextMessageContent
 from linebot.v3.webhooks.models import AudioMessageContent
 from linebot.v3.webhook import WebhookHandler
 from groq import Groq
 from dotenv import load_dotenv
 from flask import send_from_directory
-from types import SimpleNamespace
 from bs4 import BeautifulSoup
-import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from playwright.sync_api import sync_playwright
 from playwright_stealth import stealth_sync
-import cloudscraper
-import wikipediaapi
-
 
 # Load Environment Arguments
 load_dotenv()
@@ -133,9 +127,6 @@ CITY_MAPPING = {
 
 # Record AI model choosen by User
 user_ai_choice = {}
-
-# Global dictionary for translation
-user_translation_config = {}    
 
 @app.route("/", methods=["GET"])
 def home():
@@ -1792,7 +1783,6 @@ def create_flex_jable_message_nopic(videos):
         message_text += f"🎬 {video['title']}\n🔗 {video['link']}\n\n"
 
     return TextMessage(text=message_text.strip())  # 去掉最後的換行符號
-
 
 def create_flex_jable_message(videos):
     if not videos:
