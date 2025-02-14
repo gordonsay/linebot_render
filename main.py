@@ -698,11 +698,11 @@ def handle_message(event):
         else:
             message_text = "❌ 無法獲取影片資料"
 
-        # 🚀 回傳給使用者
-        reply_message = ReplyMessageRequest(
-            reply_token=event.reply_token,
-            messages=[TextMessage(text=message_text.strip())]
-        )
+        # # 🚀 回傳給使用者
+        # reply_message = ReplyMessageRequest(
+        #     reply_token=event.reply_token,
+        #     messages=[TextMessage(text=message_text.strip())]
+        # )
         flex_message = create_flex_jable_message_nopic(videos)  # ✅ 生成 FlexMessage
         if flex_message is None:  # **確保 flex_message 不為 None**
                 print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
