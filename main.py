@@ -842,7 +842,7 @@ def handle_message(event):
                 messages=[TextMessage(text=response_text)]
             )
         else:
-            flex_message = create_flex_jable_message(user_id, videos)  # ✅ 修正，傳入 user_id
+            flex_message = create_flex_jable_message(user_id, group_id, videos)  # ✅ 修正，傳入 user_id
 
             if flex_message is None:
                 print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
@@ -1988,7 +1988,6 @@ def create_flex_jable_message_nopic(videos):
 
 def create_flex_jable_message(user_id, group_id, videos):
     global video_list, video_index  # ✅ 確保變數存在
-
     session_id = group_id if group_id else user_id  # ✅ **群組內共享影片，私訊獨立**
 
     if not videos:
@@ -1999,7 +1998,6 @@ def create_flex_jable_message(user_id, group_id, videos):
     video_index[session_id] = [0, 1]  # **確保是 [idx1, idx2]，而不是 int**
     
     return generate_flex_message(session_id)
-
 
 def generate_flex_message(session_id):
     """ 根據當前索引，生成對應的 FlexMessage """
