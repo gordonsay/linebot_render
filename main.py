@@ -58,8 +58,11 @@ client = Groq(api_key=GROQ_API_KEY)
 # Initialize Flask 
 app = Flask(__name__)
 
-video_batches = {}  # 用於存儲不同批次的影片
+video_batches = {}  # 存不同批次的影片
 batch_index = {}  # 追蹤用戶當前批次
+video_list = {}  # 存放不同用戶的完整影片列表
+video_index = {}  # 存放每個用戶目前的影片索引
+
 
 # sticker list
 OFFICIAL_STICKERS = [
@@ -1980,9 +1983,6 @@ def create_flex_jable_message_nopic(videos):
 
 #     flex_contents = FlexContainer.from_json(flex_json_str)  # ✅ 解析 JSON 字串
 #     return FlexMessage(alt_text="搜尋結果", contents=flex_contents)
-
-video_batches = {}  # 存不同批次的影片
-batch_index = {}  # 追蹤用戶當前批次
 
 def create_flex_jable_message(user_id, videos):
     global video_list, video_index
