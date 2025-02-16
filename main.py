@@ -107,7 +107,6 @@ OFFICIAL_STICKERS = [
     ("6632", "11825379"),
 ]
 
-
 # 城市對應表（避免輸入錯誤）
 CITY_MAPPING = {
     # 台灣縣市
@@ -304,10 +303,8 @@ def handle_message(event):
     """處理 LINE 文字訊息，根據指令回覆或提供 AI 服務"""
     # detect type is sticker
     if event.message.type == "sticker":
-        print("✅ 偵測到貼圖訊息！")
-
+        # print("✅ 偵測到貼圖訊息！")
         reply_token = event.reply_token
-
         # **隨機選擇一個貼圖**
         package_id, sticker_id = random.choice(OFFICIAL_STICKERS)
         print(f"🎨 選擇的貼圖 package_id: {package_id}, sticker_id: {sticker_id}")
@@ -317,10 +314,10 @@ def handle_message(event):
 
         try:
             messaging_api.reply_message(reply_req)
-            print("✅ 成功回應貼圖訊息！")
+            # print("✅ 成功回應貼圖訊息！")
             return
         except Exception as e:
-            print(f"❌ 回應貼圖訊息失敗，錯誤：{e}")
+            # print(f"❌ 回應貼圖訊息失敗，錯誤：{e}")
             return
             
     # 檢查 event.message 是否存在
@@ -797,7 +794,7 @@ def handle_message(event):
                     messages=[TextMessage(text=response_text)]
                 )
             else:
-                print(f"✅ [DEBUG] 成功生成 FlexMessage: {flex_message}")  # 🔍 確保 FlexMessage 正確
+                # print(f"✅ [DEBUG] 成功生成 FlexMessage: {flex_message}")  # 🔍 確保 FlexMessage 正確
                 reply_request = ReplyMessageRequest(
                     reply_token=event.reply_token,
                     messages=[flex_message]
@@ -811,7 +808,11 @@ def handle_message(event):
     if user_message == "狗蛋推片":
         # 🚀 轉發請求到本機爬蟲伺服器（ngrok）
         try:
-            response = requests.post(f"{NGROK_URL}/crawlpromot", json={}, timeout=10)  # 增加超時處理
+            response = requests.post(
+                f"{NGROK_URL}/crawl",
+                json={},  # 傳遞關鍵字
+                timeout=10
+            )
             result = response.json()
             print(response, result)
 
