@@ -1021,6 +1021,7 @@ def handle_postback(event):
     user_id = event.source.user_id
     group_id = event.source.group_id if event.source.type == "group" else None
     data = event.postback.data
+    global video_list, video_index 
 
     # ✅ **處理 AI 模型選擇**
     model_map = {
@@ -1801,7 +1802,7 @@ def get_video_data(search_query):
 
         # ✅ **直接解析 HTML**
         videos = page.query_selector_all('.video-img-box')
-        video_list = []
+        video_list_data = []
 
         for video in videos[:2]:  # **只取前 2 部影片**
             title_elem, img_elem = video.query_selector('.title a'), video.query_selector('.img-box img')
@@ -1810,11 +1811,11 @@ def get_video_data(search_query):
             link = title_elem.get_attribute('href') if title_elem else "N/A"
             thumbnail = img_elem.get_attribute('data-src') or img_elem.get_attribute('src') if img_elem else "N/A"
 
-            video_list.append({"title": title, "link": link, "thumbnail": thumbnail})
+            video_list_data.append({"title": title, "link": link, "thumbnail": thumbnail})
 
         # ✅ **確保瀏覽器完全關閉**
         browser.close()
-        return video_list
+        return video_list_data
 
 def get_video_data_hotest():
     url = "https://jable.tv/hot/"
@@ -1844,7 +1845,7 @@ def get_video_data_hotest():
         # ✅ **直接解析 HTML，不用 set_content()**
         videos = page.query_selector_all('.video-img-box')
 
-        video_list = []
+        video_list_data = []
         for video in videos[:3]:  # **取前三個影片**
             title_elem, img_elem = video.query_selector('.title a'), video.query_selector('.img-box img')
 
@@ -1852,11 +1853,11 @@ def get_video_data_hotest():
             link = title_elem.get_attribute('href') if title_elem else "N/A"
             thumbnail = img_elem.get_attribute('data-src') or img_elem.get_attribute('src') if img_elem else "N/A"
 
-            video_list.append({"title": title, "link": link, "thumbnail": thumbnail})
+            video_list_data.append({"title": title, "link": link, "thumbnail": thumbnail})
 
         # ✅ **減少記憶體佔用**
         browser.close()
-        return video_list
+        return video_list_data
 
 def get_video_data_newest():
     url = "https://jable.tv/latest-updates/"
@@ -1892,16 +1893,16 @@ def get_video_data_newest():
 
         # ✅ 抓取影片資訊
         videos = page.query_selector_all('.video-img-box')
-        video_list = []
+        video_list_data = []
 
         for video in videos[:3]:  # 取前三個影片
             title_elem = video.query_selector('.title a')
             title = title_elem.text_content().strip() if title_elem else "N/A"
             link = title_elem.get_attribute('href') if title_elem else "N/A"
-            video_list.append({"title": title, "link": link})
+            video_list_data.append({"title": title, "link": link})
 
         browser.close()
-        return video_list
+        return video_list_data
 
 def create_flex_jable_message_nopic(videos):
     if not videos:
