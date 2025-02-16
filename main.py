@@ -775,7 +775,7 @@ def handle_message(event):
 
         if not videos:
             print("❌ [DEBUG] 爬取結果為空，回傳純文字訊息")
-            response_text = "找不到相關影片。"
+            response_text = "🚓請確認開車時刻表🚓"
             reply_request = ReplyMessageRequest(
                 reply_token=event.reply_token,
                 messages=[TextMessage(text=response_text)]
@@ -836,14 +836,13 @@ def handle_message(event):
 
         if not videos:
             print("❌ [DEBUG] 爬取結果為空，回傳純文字訊息")
-            response_text = "找不到相關影片。"
+            response_text = "🚓請確認開車時刻表🚓"
             reply_request = ReplyMessageRequest(
                 reply_token=event.reply_token,
                 messages=[TextMessage(text=response_text)]
             )
         else:
             flex_message = create_flex_jable_message(user_id, group_id, videos)  # ✅ 修正，傳入 user_id
-
             if flex_message is None:
                 print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
                 response_text = "找不到相關影片。"
@@ -859,7 +858,6 @@ def handle_message(event):
 
         send_response(event, reply_request)
         return
-
 
     # (5) 若在群組中且訊息中不包含「狗蛋」，則不觸發 AI 回應
     if event.source.type == "group" and "狗蛋" not in user_message:
