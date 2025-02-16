@@ -302,6 +302,27 @@ def send_response(event, reply_request):
 @handler.add(MessageEvent)  # 預設處理 MessageEvent
 def handle_message(event):
     """處理 LINE 文字訊息，根據指令回覆或提供 AI 服務"""
+    # detect type is sticker
+    if event.message.type == "sticker":
+        print("✅ 偵測到貼圖訊息！")
+
+        reply_token = event.reply_token
+
+        # **隨機選擇一個貼圖**
+        package_id, sticker_id = random.choice(OFFICIAL_STICKERS)
+        print(f"🎨 選擇的貼圖 package_id: {package_id}, sticker_id: {sticker_id}")
+
+        sticker_message = StickerMessage(package_id=package_id, sticker_id=sticker_id)
+        reply_req = ReplyMessageRequest(replyToken=reply_token, messages=[sticker_message])
+
+        try:
+            messaging_api.reply_message(reply_req)
+            print("✅ 成功回應貼圖訊息！")
+            return
+        except Exception as e:
+            print(f"❌ 回應貼圖訊息失敗，錯誤：{e}")
+            return
+            
     # 檢查 event.message 是否存在
     if not hasattr(event, "message"):
         return
@@ -339,27 +360,6 @@ def handle_message(event):
         ai_model = user_ai_choice.get(user_id, "deepseek-r1-distill-llama-70b")
 
     print(f"📢 [DEBUG] {user_id if not group_id else group_id} 當前模型: {ai_model}")
-
-# detect type is sticker
-    if event.message.type == "sticker":
-        print("✅ 偵測到貼圖訊息！")
-
-        reply_token = event.reply_token
-
-        # **隨機選擇一個貼圖**
-        package_id, sticker_id = random.choice(OFFICIAL_STICKERS)
-        print(f"🎨 選擇的貼圖 package_id: {package_id}, sticker_id: {sticker_id}")
-
-        sticker_message = StickerMessage(package_id=package_id, sticker_id=sticker_id)
-        reply_req = ReplyMessageRequest(replyToken=reply_token, messages=[sticker_message])
-
-        try:
-            messaging_api.reply_message(reply_req)
-            print("✅ 成功回應貼圖訊息！")
-            return
-        except Exception as e:
-            print(f"❌ 回應貼圖訊息失敗，錯誤：{e}")
-            return
 
     # (1) 「給我id」：若訊息中同時包含「給我」和「id」
     if "給我" in user_message and "id" in user_message:
