@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify
 from linebot.exceptions import InvalidSignatureError
 from linebot.v3.messaging import MessagingApi, Configuration, ApiClient
 from linebot.v3.webhooks import MessageEvent, PostbackEvent, FollowEvent
-from linebot.v3.messaging.models import ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer, ImageMessage, PushMessageRequest
+from linebot.v3.messaging.models import ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer, ImageMessage, PushMessageRequest, StickerMessage
 from linebot.v3.webhooks.models import AudioMessageContent
 from linebot.v3.webhook import WebhookHandler
 from groq import Groq
@@ -57,6 +57,56 @@ client = Groq(api_key=GROQ_API_KEY)
 
 # Initialize Flask 
 app = Flask(__name__)
+
+# sticker list
+OFFICIAL_STICKERS = [
+    ("446", "1988"),  # Moon: Special Edition
+    ("446", "1989"),
+    ("446", "1990"),
+    ("446", "1991"),
+    ("446", "1992"),
+    ("789", "10855"),  # Sally: Special Edition
+    ("789", "10856"),
+    ("789", "10857"),
+    ("789", "10858"),
+    ("789", "10859"),
+    ("1070", "17839"),  # Moon: Special Edition
+    ("1070", "17840"),
+    ("1070", "17841"),
+    ("1070", "17842"),
+    ("1070", "17843"),
+    ("6136", "10551376"),  # LINE Characters: Making Amends
+    ("6136", "10551377"),
+    ("6136", "10551378"),
+    ("6136", "10551379"),
+    ("6136", "10551380"),
+    ("6325", "10979904"),  # Brown and Cony Fun Size Pack
+    ("6325", "10979905"),
+    ("6325", "10979906"),
+    ("6325", "10979907"),
+    ("6325", "10979908"),
+    ("6359", "11069848"),  # Brown and Cony Fun Size Pack
+    ("6359", "11069849"),
+    ("6359", "11069850"),
+    ("6359", "11069851"),
+    ("6359", "11069852"),
+    ("6362", "11087920"),  # Brown and Cony Fun Size Pack
+    ("6362", "11087921"),
+    ("6362", "11087922"),
+    ("6362", "11087923"),
+    ("6362", "11087924"),
+    ("6370", "11088016"),  # Brown and Cony Fun Size Pack
+    ("6370", "11088017"),
+    ("6370", "11088018"),
+    ("6370", "11088019"),
+    ("6370", "11088020"),
+    ("6632", "11825375"),  # LINE Characters: New Year 2021
+    ("6632", "11825376"),
+    ("6632", "11825377"),
+    ("6632", "11825378"),
+    ("6632", "11825379"),
+]
+
 
 # 城市對應表（避免輸入錯誤）
 CITY_MAPPING = {
@@ -289,6 +339,27 @@ def handle_message(event):
         ai_model = user_ai_choice.get(user_id, "deepseek-r1-distill-llama-70b")
 
     print(f"📢 [DEBUG] {user_id if not group_id else group_id} 當前模型: {ai_model}")
+
+# detect type is sticker
+    if event.message.type == "sticker":
+        print("✅ 偵測到貼圖訊息！")
+
+        reply_token = event.reply_token
+
+        # **隨機選擇一個貼圖**
+        package_id, sticker_id = random.choice(OFFICIAL_STICKERS)
+        print(f"🎨 選擇的貼圖 package_id: {package_id}, sticker_id: {sticker_id}")
+
+        sticker_message = StickerMessage(package_id=package_id, sticker_id=sticker_id)
+        reply_req = ReplyMessageRequest(replyToken=reply_token, messages=[sticker_message])
+
+        try:
+            messaging_api.reply_message(reply_req)
+            print("✅ 成功回應貼圖訊息！")
+            return
+        except Exception as e:
+            print(f"❌ 回應貼圖訊息失敗，錯誤：{e}")
+            return
 
     # (1) 「給我id」：若訊息中同時包含「給我」和「id」
     if "給我" in user_message and "id" in user_message:
