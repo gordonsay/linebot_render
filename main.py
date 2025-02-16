@@ -1090,7 +1090,7 @@ def handle_postback(event):
 
         reply_req = ReplyMessageRequest(
             replyToken=event.reply_token,
-            messages=[updated_flex]  # **讓 LINE 視為「同一則訊息」的變更**
+            messages=[updated_flex]  # ✅ **讓 LINE 視為「同一則訊息」的變更**
         )
         messaging_api.reply_message(reply_req)
         return
