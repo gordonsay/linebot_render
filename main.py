@@ -1043,11 +1043,45 @@ def handle_postback(event):
         return
 
     # ✅ **處理影片批次切換**
-    if data.startswith("change_batch|"):
-        user_id = data.split("|")[1]
+    if data.startswith("change_video|"):
+        _, user_id, video_slot = data.split("|")
+        video_slot = int(video_slot)
 
-        if user_id in batch_index:
-            batch_index[user_id] = (batch_index[user_id] + 1) % 4  # **循環批次 0 → 1 → 2 → 3 → 0**
+        if user_id not in video_list or user_id not in video_index:
+            reply_req = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text="影片列表不存在，請重新搜尋。")]
+            )
+            messaging_api.reply_message(reply_req)
+            return
+
+        videos = video_list[user_id]
+        total_videos = len(videos)
+
+        # ✅ **確保索引不超過影片總數**
+        if total_videos < 3:
+            reply_req = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text="影片數量太少，無法替換！")]
+            )
+            messaging_api.reply_message(reply_req)
+            return
+
+        # ✅ **目前顯示的兩部影片索引**
+        idx1 = video_index[user_id] % total_videos
+        idx2 = (video_index[user_id] + 1) % total_videos
+
+        # ✅ **選擇要換的影片索引**
+        if video_slot == 0:
+            new_idx1 = (idx2 + 1) % total_videos
+            if new_idx1 == idx2:  # 防止重疊
+                new_idx1 = (new_idx1 + 1) % total_videos
+            video_index[user_id] = new_idx1
+        else:
+            new_idx2 = (idx1 + 2) % total_videos
+            if new_idx2 == idx1:  # 防止重疊
+                new_idx2 = (new_idx2 + 1) % total_videos
+            video_index[user_id] = new_idx2 - 1  # 調整索引，使 idx1 + 1 = idx2
 
         reply_req = ReplyMessageRequest(
             replyToken=event.reply_token,
@@ -1950,28 +1984,39 @@ video_batches = {}  # 存不同批次的影片
 batch_index = {}  # 追蹤用戶當前批次
 
 def create_flex_jable_message(user_id, videos):
-    global video_batches, batch_index
+    global video_list, video_index
 
     if not videos:
         return TextMessage(text="找不到相關影片，請嘗試其他關鍵字。")
 
-    # ✅ **將 8 部影片拆成 4 組，每組 2 部**
-    video_batches[user_id] = [videos[i:i+2] for i in range(0, len(videos), 2)]
-    batch_index[user_id] = 0  # **初始化顯示第一組**
-
+    # ✅ **存完整影片列表**
+    video_list[user_id] = videos
+    video_index[user_id] = 0  # **從索引 0 開始播放**
+    
     return generate_flex_message(user_id)
 
 def generate_flex_message(user_id):
-    """ 根據當前批次，生成對應的 FlexMessage """
-    global video_batches, batch_index
+    """ 根據當前索引，生成對應的 FlexMessage """
+    global video_list, video_index
 
-    if user_id not in video_batches:
+    if user_id not in video_list:
         return TextMessage(text="請先搜尋影片！")
 
-    batch = video_batches[user_id][batch_index[user_id]]
+    videos = video_list[user_id]
+    total_videos = len(videos)
+
+    if total_videos == 0:
+        return TextMessage(text="找不到相關影片。")
+
+    # ✅ **取得目前的兩部影片**
+    idx1 = video_index[user_id] % total_videos
+    idx2 = (video_index[user_id] + 1) % total_videos
+
+    video1 = videos[idx1]
+    video2 = videos[idx2]
 
     contents = []
-    for video in batch:
+    for i, video in enumerate([video1, video2]):
         bubble = {
             "type": "bubble",
             "hero": {
@@ -2011,31 +2056,20 @@ def generate_flex_message(user_id):
                             "label": "觀看影片",
                             "uri": video["link"]
                         }
+                    },
+                    {
+                        "type": "button",
+                        "style": "secondary",
+                        "action": {
+                            "type": "postback",
+                            "label": "換一部",
+                            "data": f"change_video|{user_id}|{i}"
+                        }
                     }
                 ]
             }
         }
         contents.append(bubble)
-
-    # ✅ **增加「換一批」按鈕**
-    contents.append({
-        "type": "bubble",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "button",
-                    "style": "primary",
-                    "action": {
-                        "type": "postback",
-                        "label": "換一批",
-                        "data": f"change_batch|{user_id}"
-                    }
-                }
-            ]
-        }
-    })
 
     flex_message_content = {
         "type": "carousel",
