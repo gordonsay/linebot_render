@@ -183,6 +183,10 @@ CITY_MAPPING = {
 # Record AI model choosen by User
 user_ai_choice = {}
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify(status="ok"), 200  # ✅ 回傳 HTTP 200 表示正常
+
 @app.route("/", methods=["GET"])
 def home():
     return "狗蛋 啟動！"
@@ -306,6 +310,7 @@ def send_response(event, reply_request):
 # TextMessage Handler
 @handler.add(MessageEvent)  # 預設處理 MessageEvent
 def handle_message(event):
+    t_ini = time.time()
     """處理 LINE 文字訊息，根據指令回覆或提供 AI 服務"""
     # detect type is sticker
     if event.message.type == "sticker":
@@ -324,8 +329,14 @@ def handle_message(event):
             return
         except Exception as e:
             # print(f"❌ 回應貼圖訊息失敗，錯誤：{e}")
+            if time.time-t_ini > 5:
+                reply_request = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text="狗蛋還在籠子裡睡, 請再呼喊牠一次🐕")]
+                )
+                send_response(event, reply_request)
             return
-            
+
     # 檢查 event.message 是否存在
     if not hasattr(event, "message"):
         return
@@ -397,9 +408,18 @@ def handle_message(event):
     
     # (2-3) Random response from default pool
     if "狗蛋" in user_message and "情勒" in user_message:
-        target_id = group_id if group_id is not None else user_id
-        random_reply(event.reply_token, target_id, messaging_api)
-        return
+        try :
+            target_id = group_id if group_id is not None else user_id
+            random_reply(event.reply_token, target_id, messaging_api)
+            return
+        except Exception as e:
+            if time.time-t_ini > 5:
+                reply_request = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text="狗蛋還在籠子裡睡, 請再呼喊牠一次🐕")]
+                )
+                send_response(event, reply_request)
+            return
 
     # (3) 「狗蛋指令」：列出所有支援指令
     if "指令" in user_message and "狗蛋" in user_message:
@@ -474,9 +494,15 @@ def handle_message(event):
                 send_response(event, reply_request)
                 messaging_api.leave_group(group_id)
                 print(f"🐶 狗蛋已離開群組 {group_id}")
+                return
             except Exception as e:
-                print(f"❌ 無法離開群組: {e}")
-            return
+                if time.time-t_ini > 5:
+                    reply_request = ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[TextMessage(text="狗蛋還在籠子裡睡, 請再呼喊牠一次🐕")]
+                    )
+                    send_response(event, reply_request)
+                return
 
     # (4-a) 「狗蛋生成」指令（例如圖片生成）
     if "狗蛋生成" in user_message:
@@ -485,8 +511,17 @@ def handle_message(event):
             prompt = "一個美麗的風景"
         print(f"📢 [DEBUG] 圖片生成 prompt: {prompt}")
         # 直接傳入 event.reply_token，而不是 user id
-        handle_generate_image_command(event.reply_token, prompt, messaging_api)
-        return
+        try:
+            handle_generate_image_command(event.reply_token, prompt, messaging_api)
+            return
+        except Exception as e:
+                if time.time-t_ini > 30:
+                    reply_request = ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[TextMessage(text="狗蛋還在籠子裡睡, 請再呼喊牠一次🐕")]
+                    )
+                    send_response(event, reply_request)
+                return
 
     # (4-b) 「當前模型」指令
     if "模型" in user_message and "當前" in user_message:
@@ -1337,14 +1372,7 @@ def random_reply(reply_token, target, messaging_api):
         replyToken=reply_token,
         messages=[TextMessage(text=chosen_message)]
     )
-    if reply_token == "DUMMY":
-        push_request = PushMessageRequest(
-            to=target,
-            messages=[TextMessage(text=chosen_message)]
-        )
-        messaging_api.push_message(push_request)
-    else:
-        messaging_api.reply_message(reply_request)
+    messaging_api.reply_message(reply_request)
 
 def generate_image_with_openai(prompt):
     """
