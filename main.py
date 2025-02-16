@@ -1090,7 +1090,7 @@ def handle_postback(event):
 
         reply_req = ReplyMessageRequest(
             replyToken=event.reply_token,
-            messages=[updated_flex]
+            messages=[updated_flex]  # **讓 LINE 視為「同一則訊息」的變更**
         )
         messaging_api.reply_message(reply_req)
         return
@@ -2082,7 +2082,8 @@ def generate_flex_message(session_id):
     flex_json_str = json.dumps(flex_message_content)
     flex_contents = FlexContainer.from_json(flex_json_str)
     
-    return FlexMessage(alt_text="更新影片", contents=flex_contents)
+    return FlexMessage(alt_text="影片更新成功", contents=flex_contents)  # ✅ **確保 alt_text 一致**
+
 
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 5000))  # 使用 Render 提供的 PORT
