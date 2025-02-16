@@ -803,13 +803,12 @@ def handle_message(event):
         send_response(event, reply_request)
         return
 
-    
     # (4-q)「狗蛋推片」
     if user_message == "狗蛋推片":
         # 🚀 轉發請求到本機爬蟲伺服器（ngrok）
         try:
             response = requests.post(
-                f"{NGROK_URL}/crawl",
+                f"{NGROK_URL}/crawlpromot",
                 json={},  # 傳遞關鍵字
                 timeout=10
             )
