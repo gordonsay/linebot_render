@@ -1023,14 +1023,12 @@ def handle_postback(event):
     group_id = event.source.group_id if event.source.type == "group" else None
     data = event.postback.data
 
-    # ✅ **處理 AI 模型選擇**
     model_map = {
         "model_gpt4o": "GPT-4o",
         "model_gpt4o_mini": "GPT_4o_Mini",
         "model_deepseek": "deepseek-r1-distill-llama-70b",
         "model_llama3": "llama3-8b-8192",
     }
-
     if data in model_map:
         if group_id:
             user_ai_choice[group_id] = model_map[data]
@@ -1044,21 +1042,6 @@ def handle_postback(event):
         messaging_api.reply_message(reply_req)
         return
 
-    # ✅ **處理影片批次切換**
-    if data.startswith("change_batch|"):
-        user_id = data.split("|")[1]
-
-        if user_id in batch_index:
-            batch_index[user_id] = (batch_index[user_id] + 1) % 4  # **循環批次 0 → 1 → 2 → 3 → 0**
-
-        reply_req = ReplyMessageRequest(
-            replyToken=event.reply_token,
-            messages=[generate_flex_message(user_id)]  # **回傳新影片批次**
-        )
-        messaging_api.reply_message(reply_req)
-        return
-
-    # ✅ **處理未知的 postback**
     reply_req = ReplyMessageRequest(
         replyToken=event.reply_token,
         messages=[TextMessage(text="未知選擇，請重試。")]
@@ -1881,29 +1864,14 @@ def create_flex_jable_message_nopic(videos):
 
     return TextMessage(text=message_text.strip())  # 去掉最後的換行符號
 
-def create_flex_jable_message(user_id, videos):
-    global video_batches, batch_index
-
+def create_flex_jable_message(videos):
     if not videos:
         return TextMessage(text="找不到相關影片，請嘗試其他關鍵字。")
 
-    # ✅ **將 8 部影片拆成 4 組，每組 2 部**
-    video_batches[user_id] = [videos[i:i+2] for i in range(0, len(videos), 2)]
-    batch_index[user_id] = 0  # **初始化顯示第一組**
-
-    return generate_flex_message(user_id)
-
-def generate_flex_message(user_id):
-    """ 根據當前批次，生成對應的 FlexMessage """
-    global video_batches, batch_index
-
-    if user_id not in video_batches:
-        return TextMessage(text="請先搜尋影片！")
-
-    batch = video_batches[user_id][batch_index[user_id]]
-
     contents = []
-    for video in batch:
+    for video in videos:
+        print(f"✅ [DEBUG] 準備加入影片: {video}")  # Debug 確認資料格式
+
         bubble = {
             "type": "bubble",
             "hero": {
@@ -1949,33 +1917,17 @@ def generate_flex_message(user_id):
         }
         contents.append(bubble)
 
-    # ✅ **增加「換一批」按鈕**
-    contents.append({
-        "type": "bubble",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "button",
-                    "style": "primary",
-                    "action": {
-                        "type": "postback",
-                        "label": "換一批",
-                        "data": f"change_batch|{user_id}"
-                    }
-                }
-            ]
-        }
-    })
-
     flex_message_content = {
         "type": "carousel",
         "contents": contents
     }
 
+    # print(f"✅ [DEBUG] 最終 FlexMessage 結構: {json.dumps(flex_message_content, indent=2)}")  # Debug
+
+    # ✅ **轉換為 JSON 字串，讓 `FlexContainer.from_json()` 可以解析**
     flex_json_str = json.dumps(flex_message_content)
-    flex_contents = FlexContainer.from_json(flex_json_str)
+
+    flex_contents = FlexContainer.from_json(flex_json_str)  # ✅ 解析 JSON 字串
     return FlexMessage(alt_text="搜尋結果", contents=flex_contents)
 
 
