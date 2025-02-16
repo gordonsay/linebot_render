@@ -1021,10 +1021,12 @@ def transcribe_and_respond_with_gpt(audio_path):
 # Post Handler
 @handler.add(PostbackEvent)
 def handle_postback(event):
+    global video_list, video_index  # ✅ 確保變數存在
+
     user_id = event.source.user_id
     group_id = event.source.group_id if event.source.type == "group" else None
+    session_id = group_id if group_id else user_id  # ✅ **群組內使用 group_id，私訊使用 user_id**
     data = event.postback.data
-    global video_list, video_index 
 
     # ✅ **處理 AI 模型選擇**
     model_map = {
@@ -1046,12 +1048,12 @@ def handle_postback(event):
         messaging_api.reply_message(reply_req)
         return
 
-    # ✅ **處理影片批次切換**
+    # ✅ **處理影片切換**
     if data.startswith("change_video|"):
-        _, user_id, video_slot = data.split("|")
+        _, session_id, video_slot = data.split("|")
         video_slot = int(video_slot)
 
-        if user_id not in video_list or user_id not in video_index:
+        if session_id not in video_list or session_id not in video_index:
             reply_req = ReplyMessageRequest(
                 replyToken=event.reply_token,
                 messages=[TextMessage(text="影片列表不存在，請重新搜尋。")]
@@ -1059,7 +1061,7 @@ def handle_postback(event):
             messaging_api.reply_message(reply_req)
             return
 
-        videos = video_list[user_id]
+        videos = video_list[session_id]
         total_videos = len(videos)
 
         # ✅ **確保影片數量足夠**
@@ -1072,22 +1074,23 @@ def handle_postback(event):
             return
 
         # ✅ **當前顯示的影片索引**
-        idx1, idx2 = video_index[user_id]
+        idx1, idx2 = video_index[session_id]
 
         if video_slot == 0:  # **換左邊的影片**
             new_idx1 = (idx1 + 1) % total_videos
             while new_idx1 == idx2:  # **確保不與右邊重疊**
                 new_idx1 = (new_idx1 + 1) % total_videos
-            video_index[user_id][0] = new_idx1
+            video_index[session_id][0] = new_idx1
         else:  # **換右邊的影片**
             new_idx2 = (idx2 + 1) % total_videos
             while new_idx2 == idx1:  # **確保不與左邊重疊**
                 new_idx2 = (new_idx2 + 1) % total_videos
-            video_index[user_id][1] = new_idx2
+            video_index[session_id][1] = new_idx2
 
+        # ✅ **使用 `reply_message` 更新整個群組或個人畫面**
         reply_req = ReplyMessageRequest(
             replyToken=event.reply_token,
-            messages=[generate_flex_message(user_id)]
+            messages=[generate_flex_message(session_id)]
         )
         messaging_api.reply_message(reply_req)
         return
@@ -1098,6 +1101,7 @@ def handle_postback(event):
         messages=[TextMessage(text="未知選擇，請重試。")]
     )
     messaging_api.reply_message(reply_req)
+
 
 
 def send_ai_selection_menu(reply_token, target=None, use_push=False):
@@ -1982,34 +1986,36 @@ def create_flex_jable_message_nopic(videos):
 #     flex_contents = FlexContainer.from_json(flex_json_str)  # ✅ 解析 JSON 字串
 #     return FlexMessage(alt_text="搜尋結果", contents=flex_contents)
 
-def create_flex_jable_message(user_id, videos):
-    global video_list, video_index
+def create_flex_jable_message(user_id, group_id, videos):
+    global video_list, video_index  # ✅ 確保變數存在
+
+    session_id = group_id if group_id else user_id  # ✅ **群組內共享影片，私訊獨立**
 
     if not videos:
         return TextMessage(text="找不到相關影片，請嘗試其他關鍵字。")
 
     # ✅ **存完整影片列表**
-    video_list[user_id] = videos
-    video_index[user_id] = 0  # **從索引 0 開始播放**
+    video_list[session_id] = videos
+    video_index[session_id] = [0, 1]  # **確保是 [idx1, idx2]，而不是 int**
     
-    return generate_flex_message(user_id)
+    return generate_flex_message(session_id)
 
-def generate_flex_message(user_id):
+
+def generate_flex_message(session_id):
     """ 根據當前索引，生成對應的 FlexMessage """
-    global video_list, video_index
+    global video_list, video_index  # ✅ 避免變數未定義錯誤
 
-    if user_id not in video_list:
+    if session_id not in video_list or session_id not in video_index:
         return TextMessage(text="請先搜尋影片！")
 
-    videos = video_list[user_id]
+    videos = video_list[session_id]
     total_videos = len(videos)
 
-    if total_videos == 0:
-        return TextMessage(text="找不到相關影片。")
+    if total_videos < 2:
+        return TextMessage(text="影片數量太少，無法播放！")
 
-    # ✅ **取得目前的兩部影片**
-    idx1 = video_index[user_id] % total_videos
-    idx2 = (video_index[user_id] + 1) % total_videos
+    # ✅ **取得當前要顯示的兩部影片**
+    idx1, idx2 = video_index[session_id]
 
     video1 = videos[idx1]
     video2 = videos[idx2]
@@ -2062,7 +2068,7 @@ def generate_flex_message(user_id):
                         "action": {
                             "type": "postback",
                             "label": "換一部",
-                            "data": f"change_video|{user_id}|{i}"
+                            "data": f"change_video|{session_id}|{i}"
                         }
                     }
                 ]
