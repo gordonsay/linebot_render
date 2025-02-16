@@ -1062,30 +1062,28 @@ def handle_postback(event):
         videos = video_list[user_id]
         total_videos = len(videos)
 
-        # ✅ **確保索引不超過影片總數**
-        if total_videos < 3:
+        # ✅ **確保影片數量足夠**
+        if total_videos < 2:
             reply_req = ReplyMessageRequest(
                 replyToken=event.reply_token,
-                messages=[TextMessage(text="影片數量太少，無法替換！")]
+                messages=[TextMessage(text="影片數量不足，無法替換！")]
             )
             messaging_api.reply_message(reply_req)
             return
 
-        # ✅ **目前顯示的兩部影片索引**
-        idx1 = video_index[user_id] % total_videos
-        idx2 = (video_index[user_id] + 1) % total_videos
+        # ✅ **當前顯示的影片索引**
+        idx1, idx2 = video_index[user_id]
 
-        # ✅ **選擇要換的影片索引**
-        if video_slot == 0:
-            new_idx1 = (idx2 + 1) % total_videos
-            if new_idx1 == idx2:  # 防止重疊
+        if video_slot == 0:  # **換左邊的影片**
+            new_idx1 = (idx1 + 1) % total_videos
+            while new_idx1 == idx2:  # **確保不與右邊重疊**
                 new_idx1 = (new_idx1 + 1) % total_videos
-            video_index[user_id] = new_idx1
-        else:
-            new_idx2 = (idx1 + 2) % total_videos
-            if new_idx2 == idx1:  # 防止重疊
+            video_index[user_id][0] = new_idx1
+        else:  # **換右邊的影片**
+            new_idx2 = (idx2 + 1) % total_videos
+            while new_idx2 == idx1:  # **確保不與左邊重疊**
                 new_idx2 = (new_idx2 + 1) % total_videos
-            video_index[user_id] = new_idx2 - 1  # 調整索引，使 idx1 + 1 = idx2
+            video_index[user_id][1] = new_idx2
 
         reply_req = ReplyMessageRequest(
             replyToken=event.reply_token,
