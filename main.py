@@ -1025,7 +1025,7 @@ def handle_postback(event):
 
     user_id = event.source.user_id
     group_id = event.source.group_id if event.source.type == "group" else None
-    session_id = group_id if group_id else user_id  # ✅ **群組內使用 group_id，私訊使用 user_id**
+    session_id = group_id if group_id else user_id  # ✅ **群組內共享影片，私訊獨立**
     data = event.postback.data
 
     # ✅ **處理 AI 模型選擇**
@@ -1061,10 +1061,9 @@ def handle_postback(event):
             messaging_api.reply_message(reply_req)
             return
 
-        videos = video_list[session_id]
+        videos = video_list.get(session_id, [])  # ✅ 確保 videos 存在
         total_videos = len(videos)
 
-        # ✅ **確保影片數量足夠**
         if total_videos < 2:
             reply_req = ReplyMessageRequest(
                 replyToken=event.reply_token,
@@ -1073,7 +1072,6 @@ def handle_postback(event):
             messaging_api.reply_message(reply_req)
             return
 
-        # ✅ **當前顯示的影片索引**
         idx1, idx2 = video_index[session_id]
 
         if video_slot == 0:  # **換左邊的影片**
@@ -1087,10 +1085,12 @@ def handle_postback(event):
                 new_idx2 = (new_idx2 + 1) % total_videos
             video_index[session_id][1] = new_idx2
 
-        # ✅ **使用 `reply_message` 更新整個群組或個人畫面**
+        # ✅ **直接用 `reply_message` 更新當前 `FlexMessage`**
+        updated_flex = generate_flex_message(session_id)
+
         reply_req = ReplyMessageRequest(
             replyToken=event.reply_token,
-            messages=[generate_flex_message(session_id)]
+            messages=[updated_flex]
         )
         messaging_api.reply_message(reply_req)
         return
@@ -2081,7 +2081,8 @@ def generate_flex_message(session_id):
 
     flex_json_str = json.dumps(flex_message_content)
     flex_contents = FlexContainer.from_json(flex_json_str)
-    return FlexMessage(alt_text="搜尋結果", contents=flex_contents)
+    
+    return FlexMessage(alt_text="更新影片", contents=flex_contents)
 
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 5000))  # 使用 Render 提供的 PORT
