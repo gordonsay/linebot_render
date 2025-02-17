@@ -334,7 +334,7 @@ def handle_message(event):
         model = genai.GenerativeModel("gemini-1.5-pro")
         response = model.generate_content(
             [
-                {"text": "圖片中包含哪些内容？請以繁體中文輕鬆簡易的口語化回答, 覺得我傳這張照片想跟你聊什麼。"},
+                {"text": "圖片中包含哪些内容？ 請以繁體中文輕鬆簡易的口語化回答, 推測我想藉由這張照片跟你聊的內容回覆我。例如：當照片中存在一個主角人物時, 回覆：圖片中這是你嗎？看起來心情不錯喔, 有發生什麼好事嗎? ; 當照片中為場景時回覆：看起來好美阿, 是之前去玩嗎還是之後想去這裡走走"},
                 image  # 直接传入 `PIL.Image` 对象
             ]
         )
