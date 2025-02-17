@@ -73,4 +73,6 @@ playwright
 playwright-stealth
 uvicorn
 wikipedia-api==0.8.1
+google-generativeai
+pillow
 

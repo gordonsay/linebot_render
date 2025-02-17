@@ -2,7 +2,7 @@ import os, re, json, openai, random, time, requests, shutil, datetime, wikipedia
 from pydub import AudioSegment
 from flask import Flask, request, jsonify
 from linebot.exceptions import InvalidSignatureError
-from linebot.v3.messaging import MessagingApi, Configuration, ApiClient
+from linebot.v3.messaging import MessagingApi, Configuration, ApiClient, MessagingApiBlob
 from linebot.v3.webhooks import MessageEvent, PostbackEvent, FollowEvent
 from linebot.v3.messaging.models import ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer, ImageMessage, PushMessageRequest, StickerMessage
 from linebot.v3.webhooks.models import AudioMessageContent
@@ -14,6 +14,9 @@ from bs4 import BeautifulSoup
 from spotipy.oauth2 import SpotifyClientCredentials
 from playwright.sync_api import sync_playwright
 from playwright_stealth import stealth_sync
+import google.generativeai as genai  # ✅ 正确的导入方式
+import PIL.Image
+from io import BytesIO
 
 # Load Environment Arguments
 load_dotenv()
@@ -26,6 +29,7 @@ TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 STABILITY_API_KEY = os.getenv("STABILITY_API_KEY")
 HUGGING_TOKENS = os.getenv("HUGGING_TOKENS")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+openai.api_key = OPENAI_API_KEY 
 GOOGLE_SEARCH_KEY = os.getenv("GOOGLE_SEARCH_KEY")
 GOOGLE_CX = os.getenv("GOOGLE_CX")
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
@@ -36,6 +40,8 @@ OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 OPENWEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
 BASE_URL = "https://render-linebot-masp.onrender.com"
 WIKIDATA_API_URL = "https://www.wikidata.org/w/api.php"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
 NGROK_URL = os.getenv("NGROK_URL")
 
 # 初始化 Spotipy
@@ -54,6 +60,7 @@ config = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
 messaging_api = MessagingApi(ApiClient(config))
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 client = Groq(api_key=GROQ_API_KEY)
+messaging_api_blob = MessagingApiBlob(ApiClient(config))
 
 # Initialize Flask 
 app = Flask(__name__)
@@ -310,7 +317,47 @@ def send_response(event, reply_request):
 # TextMessage Handler
 @handler.add(MessageEvent)  # 預設處理 MessageEvent
 def handle_message(event):
+    """處理 LINE Picture訊息，根據指令回覆或提供 AI 服務"""
     t_ini = time.time()
+    if event.message.type == "image":
+        # ✅ 下载 LINE 服务器上的图片
+        message_id = event.message.id
+        message_content = messaging_api_blob.get_message_content(message_id)
+
+        # ✅ 保存图片
+        image_path = f"/tmp/{message_id}.jpg"
+        with open(image_path, "wb") as fd:
+            fd.write(message_content)
+
+        # ✅ 使用 `Gemini` 进行详细分析
+        image = PIL.Image.open(image_path)
+        model = genai.GenerativeModel("gemini-1.5-pro")
+        response = model.generate_content(
+            [
+                {"text": "圖片中包含哪些内容？請以繁體中文回答。"},
+                image  # 直接传入 `PIL.Image` 对象
+            ]
+        )
+        # ✅ 获取 `Gemini` 生成的详细描述
+        gemini_text = response.text.strip()
+
+        # ✅ 删除本地图片
+        os.remove(image_path)
+        # ✅ 解决 `LINE` 长度限制（单条消息最多 2000 字）
+        messages = []
+        while gemini_text:
+            messages.append(TextMessage(text=gemini_text[:2000]))  # 取 2000 字以内
+            gemini_text = gemini_text[2000:]  # 截取剩余部分
+
+        # ✅ 发送 AI 生成的回复
+        messaging_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=messages
+            )
+        )
+        return
+
     """處理 LINE 文字訊息，根據指令回覆或提供 AI 服務"""
     # detect type is sticker
     if event.message.type == "sticker":
