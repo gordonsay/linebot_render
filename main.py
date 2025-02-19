@@ -17,6 +17,7 @@ from playwright_stealth import stealth_sync
 import google.generativeai as genai  # ✅ 正确的导入方式
 import PIL.Image
 from io import BytesIO
+from database import save_chat_history, get_recent_chat_history
 
 # Load Environment Arguments
 load_dotenv()
@@ -643,6 +644,19 @@ def handle_message(event):
     user_id = event.source.user_id
     group_id = event.source.group_id if event.source.type == "group" else None
 
+    if "狗蛋儲存" in user_message:
+        user_message_history = user_message.replace("狗蛋儲存", "").strip()
+        # 儲存使用者訊息
+        save_to_data = f"{user_id} talk with ai about contents:{user_message_history}"
+        save_chat_history(user_id, "user", save_to_data)
+        # 取得最近 5 條對話歷史
+        reply_request = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[TextMessage(text="save done")]
+        )
+        send_response(event, reply_request)
+        return
+
     # 檢查目前選用的 AI 模型
     if group_id and group_id in user_ai_choice:
         ai_model = user_ai_choice[group_id]
@@ -1183,7 +1197,12 @@ def handle_message(event):
     else:
         ai_model = user_ai_choice.get(user_id, "deepseek-r1-distill-llama-70b")
     
-    gpt_reply = ask_groq(user_message, ai_model)
+    history = get_recent_chat_history(user_id)
+    prompt = f"following contents is history : {history}, according to history, this is my input:{user_message}"
+    gpt_reply = ask_groq(prompt, ai_model)
+    prompt_reponse = f"conversation as following between {user_id} and ai assistant, my input to ai is {user_message}, and ai response is {gpt_reply}"
+    save_chat_history(user_id, "assistant", prompt_reponse)
+    
     try:
         reply_request = ReplyMessageRequest(
             replyToken=event.reply_token,
@@ -1410,8 +1429,6 @@ def handle_postback(event):
         messages=[TextMessage(text="未知選擇，請重試。")]
     )
     messaging_api.reply_message(reply_req)
-
-
 
 def send_ai_selection_menu(reply_token, target=None, use_push=False):
     """發送 AI 選擇選單"""
