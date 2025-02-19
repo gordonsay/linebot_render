@@ -1795,7 +1795,7 @@ def search_wikidata(name):
     return None, None
 
 def search_person_info(name):
-    """查詢維基百科，若無則查 Wikidata，最後讓 AI 生成回應"""
+    """查詢維基百科，若無則讓 AI 生成回應"""
 
     wiki_wiki = wikipediaapi.Wikipedia(user_agent="MyLineBot/1.0", language="zh")
     page = wiki_wiki.page(name)
@@ -1804,50 +1804,49 @@ def search_person_info(name):
         wiki_content = page.summary[:500]  # 取前 500 字
         print(f"📢 [DEBUG] 維基百科查詢成功: {wiki_content[:50]}...")
 
+        # 如果維基百科條目有歧義，提示使用者提供更精確的關鍵字
         if "可能是下列" in wiki_content or "可能指" in wiki_content or "可以指" in wiki_content:
             return f"找到多個相關條目，請提供更精確的關鍵字：\n{wiki_content[:200]}...", f"{BASE_URL}/static/blackquest.jpg"
 
+        # 搜尋對應圖片
         image_url = search_google_image(name)
         ai_prompt = f"請用 4-5 句話介紹 {name} 是誰。\n\n維基百科內容:\n{wiki_content}, 限制使用繁體中文回答"
 
     else:
-        print(f"❌ [DEBUG] 維基百科無結果，嘗試 Wikidata")
-        entity_id, entity_url = search_wikidata(name)
+        print(f"❌ [DEBUG] 維基百科無結果，改用 AI 猜測")
+        
+        # AI 猜測時，加上標籤 [AI自動生成]
+        ai_prompt = f"請用 4-5 句話介紹 {name} 是誰，並確保資訊準確，限制使用繁體中文回答"
+        response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b")
+        
+        # 加上 AI 自動生成標註
+        response_text = f"[未找到對應內容-由AI自動生成]\n{response_text}"
+        
+        # 使用預設圖片 hello.jpg
+        return response_text, f"{BASE_URL}/static/airesponse.jpg"
 
-        if entity_id:
-            ai_prompt = f"請用 4-5 句話介紹 {name} 是誰，參考 Wikidata 資訊：{entity_url}, 限制使用繁體中文回答"
-            response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b")
-            return response_text, entity_url
-
-        print(f"❌ [DEBUG] Wikidata 也無結果，改用 AI 猜測")
-        correction_prompt = f"使用者查詢 '{name}'，請提供一個在 Wikipedia 或 Wikidata 上確實存在的條目名稱，若無合理結果，請回應『找不到合適結果』。"
-        suggested_keyword = ask_groq(correction_prompt, "deepseek-r1-distill-llama-70b")
-
-        if "找不到" in suggested_keyword or not validate_wikipedia_keyword(suggested_keyword):
-            return "找不到合適結果，請提供更具體的關鍵字。", f"{BASE_URL}/static/blackquest.jpg"
-
-        return f"你是想問「{suggested_keyword}」嗎？", f"{BASE_URL}/static/blackquest.jpg"
-
+    # AI 生成回應
     response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b")
     print(f"📢 [DEBUG] AI 回應: {response_text[:50]}...")
 
     return response_text, image_url
 
 def create_flex_message(text, image_url):
+    """建立 Flex Message，確保圖片可顯示"""
     if not image_url or not image_url.startswith("http"):
-        return TextMessage(text="找不到適合的圖片，請嘗試其他關鍵字。")
+        return TextMessage(text="找不到適合的圖片，請換個關鍵字試試！")
 
     flex_content = {
         "type": "bubble",
         "hero": {
             "type": "image",
             "url": image_url,
-            "size": "xl",
-            "aspectRatio": "1:1",
+            "size": "full",
+            "aspectRatio": "16:9",
             "aspectMode": "fit",
-            "action": {  # ✅ 新增點擊圖片後放大
+            "action": {
                 "type": "uri",
-                "uri": image_url
+                "uri": image_url  # ✅ 點擊後可查看原圖
             }
         },
         "body": {
@@ -1870,24 +1869,41 @@ def create_flex_message(text, image_url):
     return FlexMessage(alt_text=text, contents=flex_contents)
 
 def search_google_image(query):
-    """搜尋 Google 圖片並返回第一張有效的圖片 URL"""
-    google_url = f"https://www.google.com/search?q={query}&tbm=isch"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    """使用 Google Custom Search API 搜尋可直接顯示的圖片 URL"""
+    search_url = "https://www.googleapis.com/customsearch/v1"
+
+    params = {
+        "q": query,
+        "cx": GOOGLE_CX,
+        "key": GOOGLE_SEARCH_KEY,
+        "searchType": "image",  # 只搜尋圖片
+        "num": 2,  # 取得 2 張圖片，確保至少有 1 張可用
+        "imgSize": "xlarge",  # 嘗試獲取更高清圖片
+        "fileType": "jpg,png",  # 確保回傳的是圖片，不是其他格式
+        "safe": "off"
+    }
 
     try:
-        response = requests.get(google_url, headers=headers)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, "html.parser")
-            images = soup.find_all("img")
+        response = requests.get(search_url, params=params)
+        data = response.json()
 
-            for img in images[1:]:  # 跳過第一張（通常是 Google 標誌）
-                image_url = img.get("src", "")
-                if image_url.startswith("http"):  # 只回傳有效的 HTTP(S) 圖片
-                    return image_url
+        if "items" in data:
+            for item in data["items"]:
+                image_url = item["link"]
+
+                # ❌ 過濾 Facebook / Instagram / 動態圖片 (帶 `?` 參數的)
+                if "fbcdn.net" in image_url or "instagram.com" in image_url or "?" in image_url:
+                    continue
+
+                # 🔍 確保圖片可以直接存取（不重定向）
+                img_response = requests.get(image_url, allow_redirects=False)
+                if img_response.status_code == 200:
+                    return image_url  # ✅ 返回可用圖片
+
     except Exception as e:
-        print(f"❌ Google 搜圖錯誤: {e}")
+        print(f"❌ Google Custom Search API 錯誤: {e}")
 
-    return None  # 找不到圖片時回傳 None
+    return None  # 找不到可顯示的圖片時回傳 None
 
 def search_spotify_song(song_name):
     """ 透過 Spotify API 搜尋歌曲並回傳預覽 URL 與歌曲連結 """
