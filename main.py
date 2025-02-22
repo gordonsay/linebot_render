@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify
 from linebot.exceptions import InvalidSignatureError
 from linebot.v3.messaging import MessagingApi, Configuration, ApiClient, MessagingApiBlob
 from linebot.v3.webhooks import MessageEvent, PostbackEvent, FollowEvent
-from linebot.v3.messaging.models import ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer, ImageMessage, PushMessageRequest, StickerMessage
+from linebot.v3.messaging.models import ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer, ImageMessage, PushMessageRequest, StickerMessage, AudioMessage
 from linebot.v3.webhooks.models import AudioMessageContent
 from linebot.v3.webhook import WebhookHandler
 from groq import Groq
@@ -18,6 +18,10 @@ import google.generativeai as genai  # ✅ 正确的导入方式
 import PIL.Image
 from io import BytesIO
 from database import save_chat_history, get_recent_chat_history
+import io, uuid
+from mutagen.mp3 import MP3
+from urllib.parse import quote
+from langdetect import detect, DetectorFactory
 
 # Load Environment Arguments
 load_dotenv()
@@ -43,6 +47,7 @@ BASE_URL = "https://render-linebot-masp.onrender.com"
 WIKIDATA_API_URL = "https://www.wikidata.org/w/api.php"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
+VRSS_API_KEY = os.getenv("VRSS_API_KEY")
 NGROK_URL = os.getenv("NGROK_URL")
 
 # 初始化 Spotipy
@@ -413,6 +418,46 @@ CITY_MAPPING = {
     "杜拜": "Dubai",
     "伊斯坦堡": "Istanbul",
     "莫斯科": "Moscow"
+}
+
+LANGUAGE_MAP = {
+    "ar": "ar-eg",
+    "bg": "bg-bg",
+    "ca": "ca-es",
+    "zh-cn": "zh-cn",
+    "zh-tw": "zh-tw",
+    "zh": "zh-cn",    # 偵測到 "zh" 時，預設使用簡體中文
+    "hr": "hr-hr",
+    "cs": "cs-cz",
+    "da": "da-dk",
+    "nl": "nl-nl",
+    "en": "en-us",    # 英文預設使用美式英語
+    "et": "et-ee",
+    "fi": "fi-fi",
+    "fr": "fr-fr",
+    "de": "de-de",
+    "el": "el-gr",
+    "he": "he-il",
+    "hu": "hu-hu",
+    "id": "id-id",
+    "it": "it-it",
+    "ja": "ja-jp",
+    "ko": "ko-kr",
+    "lv": "lv-lv",
+    "lt": "lt-lt",
+    "no": "no-no",
+    "pl": "pl-pl",
+    "pt": "pt-br",   # 這裡預設使用巴西葡萄牙語
+    "ro": "ro-ro",
+    "ru": "ru-ru",
+    "sr": "sr-rs",
+    "sk": "sk-sk",
+    "sl": "sl-si",
+    "es": "es-es",   # 預設使用西班牙語（西班牙）
+    "sv": "sv-se",
+    "tr": "tr-tr",
+    "uk": "uk-ua",
+    "vi": "vi-vn"
 }
 
 # Record AI model choosen by User
@@ -940,6 +985,37 @@ def handle_message(event):
                 )
 
         send_response(event, reply_request)
+        return
+
+    if user_message.startswith("狗蛋翻譯"):
+        user_message = user_message.replace("狗蛋翻譯", "").strip()
+        gpt_reply = ask_translate(user_message, "deepseek-r1-distill-llama-70b")
+    
+        # 將回覆文字轉換成語音資料
+        audio_data = text_to_speech(gpt_reply, rate=1)
+        if not audio_data or len(audio_data) == 0:
+            messaging_api.reply_message({
+                "replyToken": event.reply_token,
+                "messages": [TextMessage(text="语音转换失败，请稍后再试。")]
+            })
+            return
+        
+        # 將音檔存入 static/audio 並取得公開 URL
+        audio_url, audio_pri_url = upload_audio(audio_data)
+        if not audio_url:
+            messaging_api.reply_message({
+                "replyToken": event.reply_token,
+                "messages": [TextMessage(text="音檔上傳失敗，请检查伺服器配置。")]
+            })
+            return
+        audio_message = AudioMessage(originalContentUrl=audio_url, duration=30000)
+        text_message = TextMessage(text=f"翻譯內容:\n{gpt_reply}")
+        
+        # 使用單一 reply_message 回覆語音訊息
+        messaging_api.reply_message({
+            "replyToken": event.reply_token,
+            "messages": [audio_message, text_message]
+        })
         return
 
     # (4-i)狗蛋氣象
@@ -1586,6 +1662,35 @@ def ask_groq(user_message, model, retries=3, backoff_factor=1.0):
                 content = chat_completion.choices[0].message.content.strip()
                 content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
                 return content
+
+        except requests.exceptions.RequestException as e:
+            print(f"❌ API 連線失敗 (第 {i+1} 次)：{e}")
+            time.sleep(backoff_factor * (2 ** i))  # 指數退避 (1s, 2s, 4s)
+
+        except Exception as e:
+            print(f"❌ AI API 呼叫錯誤: {e}")
+            return "❌ 狗蛋伺服器錯誤，請稍後再試。"
+
+    return "❌ 無法連線至 AI 服務，請稍後再試。"
+
+def ask_translate(user_message, model, retries=3, backoff_factor=1.0):
+    print(f"[ask_translate] 模型參數: {model}")
+
+    for i in range(retries):
+        try:
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": "你是一位專業翻譯專家，請根據使用者的需求精準且自然地翻譯以下內容。全部內容一定都要完成翻譯不殘留原語言"},
+                    {"role": "user", "content": user_message},
+                ],
+                model=model.lower(),
+            )
+            if not chat_completion.choices:
+                return "❌ 狗蛋無法回應，請稍後再試。"
+
+            content = chat_completion.choices[0].message.content.strip()
+            content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+            return content
 
         except requests.exceptions.RequestException as e:
             print(f"❌ API 連線失敗 (第 {i+1} 次)：{e}")
@@ -2481,6 +2586,73 @@ def generate_flex_message(session_id):
     flex_contents = FlexContainer.from_json(flex_json_str)
     
     return FlexMessage(alt_text="影片更新成功", contents=flex_contents)  # ✅ **確保 alt_text 一致**
+
+def text_to_speech(text: str, rate: int = 0) -> bytes:
+    """
+    使用 VoiceRSS TTS API 將文字轉換成語音（二進位資料），並根據輸入文字自動偵測語言，
+    同時將偵測到的語言轉換為 VoiceRSS 支援的語言代碼後再發送 API 請求。
+    
+    參數:
+      - text: 要轉換的文字
+      - rate: 語速參數 (-10 ~ 10)，預設為 0 (正常語速)
+      
+    回傳:
+      - 轉換後的 MP3 格式音訊二進位資料，若失敗則回傳 None
+    """
+    # 自動偵測輸入文字的語言
+    try:
+        detected_lang = detect(text)
+    except Exception as e:
+        print("語言偵測失敗，預設使用英文。", e)
+        detected_lang = "en"
+    
+    # 根據偵測結果取得對應的 VoiceRSS 語言代碼
+    language = LANGUAGE_MAP.get(detected_lang.lower(), "en-us")
+    print("偵測到的語言:", detected_lang, "=> 使用語言參數:", language)
+    
+    encoded_text = quote(text)
+    
+    # 使用傳入的 rate 參數
+    tts_url = f"http://api.voicerss.org/?key={VRSS_API_KEY}&hl={language}&r={0}&src={encoded_text}"
+    print("TTS URL:", tts_url)
+    
+    response = requests.get(tts_url)
+    if response.status_code == 200:
+        # 若回傳資料為二進位音訊，不要 decode，否則可能產生錯誤
+        print("TTS API 回傳內容大小:", len(response.content))
+        return response.content
+    else:
+        print("TTS API 錯誤，狀態碼:", response.status_code, "回傳內容:", response.content)
+        return None
+
+def upload_audio(audio_data: bytes) -> str:
+    """
+    將音檔存入 static/audio 目錄，並回傳公開 URL。
+    請確認你的伺服器已設定好 static 目錄能夠公開存取。
+    """
+    audio_dir = os.path.join(app.static_folder, "audio")
+    os.makedirs(audio_dir, exist_ok=True)
+    filename = f"{uuid.uuid4()}.mp3"
+    file_path = os.path.join(audio_dir, filename)
+    with open(file_path, "wb") as f:
+        f.write(audio_data)
+    # 檢查檔案是否成功儲存
+    if not os.path.exists(file_path):
+        print("檔案不存在:", file_path)
+    public_url = f"{BASE_URL}/static/audio/{filename}"
+    private_url = f"./static/audio/{filename}"
+    return public_url, private_url
+
+def get_audio_duration(audio_bytes: bytes) -> int:
+    """
+    根據 MP3 的二進位資料自動偵測音訊長度，並回傳毫秒數。
+    """
+    # 使用 BytesIO 包裝二進位資料，讓 mutagen 能讀取
+    audio_file = io.BytesIO(audio_bytes)
+    audio = MP3(audio_file)
+    duration_seconds = audio.info.length  # 時長（秒）
+    duration_ms = int(duration_seconds * 1000)  # 換算成毫秒
+    return duration_ms
 
 
 if __name__ == "__main__":
