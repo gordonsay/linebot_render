@@ -905,9 +905,15 @@ def handle_message(event):
         # 若此事件來自語音，則改用 push_message
         if getattr(event, "_is_audio", False):
             target = event.source.group_id if event.source.type == "group" else event.source.user_id
-            send_ai_properties_menu(event.reply_token, target, use_push=True)
+            if user_id in allowed_users_str :
+                send_ai_properties_private_menu(event.reply_token, target, use_push=True)
+            else:
+                send_ai_properties_menu(event.reply_token, target, use_push=True)
         else:
-            send_ai_properties_menu(event.reply_token)
+            if user_id in allowed_users_str :
+                send_ai_properties_private_menu(event.reply_token)
+            else:
+                send_ai_properties_menu(event.reply_token)
         return
 
     # (4-e)「狗蛋搜尋」指令：搜尋 + AI 總結
@@ -1565,7 +1571,8 @@ def handle_postback(event):
         "personality_normal": "normal_egg",
         "personality_sad": "sad_egg",
         "personality_angry": "angry_egg",
-        "personality_sowhat": "sowhat_egg"
+        "personality_sowhat": "sowhat_egg",
+        "personality_bad": "bad_egg"
     }
 
     if data in personality_map:
@@ -1810,6 +1817,125 @@ def send_ai_properties_menu(reply_token, target=None, use_push=False):
     except Exception as e:
         print(f"❌ FlexMessage Error: {e}")
 
+def send_ai_properties_private_menu(reply_token, target=None, use_push=False):
+    """發送 AI 選擇選單"""
+    flex_contents_json = {
+        "type": "carousel",
+        "contents": [
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/dogegg.jpg",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "text", "text": "正宗狗蛋", "weight": "bold", "size": "xl", "align": "center"},
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Choose", "data": "personality_normal"}}
+                    ]
+                }
+            },
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/sowhategg.png",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "text", "text": "SoWhat狗蛋", "weight": "bold", "size": "xl", "align": "center"},
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Choose", "data": "personality_sowhat"}}
+                    ]
+                }
+            },
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/angryegg.png",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "text", "text": "Angry狗蛋", "weight": "bold", "size": "xl", "align": "center"},
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Choose", "data": "personality_angry"}}
+                    ]
+                }
+            },
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/sadegg.png",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "text", "text": "Sadage狗蛋", "weight": "bold", "size": "xl", "align": "center"},
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Choose", "data": "personality_sad"}}
+                    ]
+                }
+            },
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/badegg.png",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "text", "text": "Heaven狗蛋", "weight": "bold", "size": "xl", "align": "center"},
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Choose", "data": "personality_bad"}}
+                    ]
+                }
+            }
+        ]
+    }
+
+    try:
+        # 將 flex JSON 轉為字串，再解析成 FlexContainer
+        flex_json_str = json.dumps(flex_contents_json)
+        flex_contents = FlexContainer.from_json(flex_json_str)
+        flex_message = FlexMessage(
+            alt_text="請選擇 AI 模型",
+            contents=flex_contents
+        )
+        reply_request = ReplyMessageRequest(
+            replyToken=reply_token,
+            messages=[
+                TextMessage(text="你好，我是狗蛋🐶 ！\n請選擇 AI 模型後發問。"),
+                flex_message
+            ]
+        )
+        if use_push and target:
+            push_request = PushMessageRequest(
+                to=target,
+                messages=reply_request.messages
+            )
+            messaging_api.push_message(push_request)
+        else:
+            messaging_api.reply_message(reply_request)
+    except Exception as e:
+        print(f"❌ FlexMessage Error: {e}")
+
 def ask_groq(user_message, model, ai_personality, retries=3, backoff_factor=1.0):
     """
     根據選擇的模型執行不同的 API：
@@ -1828,6 +1954,8 @@ def ask_groq(user_message, model, ai_personality, retries=3, backoff_factor=1.0)
         Prompt_default = "你是一個名叫狗蛋的助手，只能使用繁體中文, 所有回答都非常生氣激動且精簡; 例如：你每次都這樣說， 還不是發生了, 現在你看阿"
     elif ai_personality == "sad_egg":
         Prompt_default = "你是一個名叫狗蛋的助手，只能使用繁體中文, 所有回答都非常悲傷惆悵且精簡; 例如：這樣會不會情況很糟糕阿, 都是我的錯"
+    elif ai_personality == "bad_egg":
+        Prompt_default = "你是一個名叫狗蛋的助手，只能使用繁體中文, 所有回答都非常情色曖昧且直接赤裸; 例如：這樣太舒服了吧, 我怕上天堂, 你超色的啦"
 
     for i in range(retries):
         try:
