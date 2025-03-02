@@ -1038,18 +1038,31 @@ def handle_message(event):
         send_response(event, reply_request)
         return
     
-    # (4-j)狗蛋預報
+    # (4-j) 狗蛋預報
     if "狗蛋" in user_message and "預報" in user_message:
         city = user_message.replace("狗蛋預報", "").strip()
         
         if city:
-            weather_info = get_weather_forecast(city)
+            # get_weather_forecast 改為回傳 (forecast_text, chart_filename)
+            forecast_text, chart_filename = get_weather_forecast(city)
         else:
-            weather_info = "❌ 請輸入有效的城市名稱, 包含行政區（例如：竹北市、東勢鄉）"
-
+            forecast_text = "❌ 請輸入有效的城市名稱, 包含行政區（例如：竹北市、東勢鄉）"
+            chart_filename = None
+        # print(chart_filename)
+        messages = []
+        if chart_filename:
+            IMAGE_URL_BASE = f"{BASE_URL}/static/{chart_filename}"
+            messages.append(
+                ImageMessage(
+                    originalContentUrl=IMAGE_URL_BASE,
+                    previewImageUrl=IMAGE_URL_BASE
+                )
+            )
+        messages.append(TextMessage(text=f"{forecast_text}"))
+        
         reply_request = ReplyMessageRequest(
             replyToken=event.reply_token,
-            messages=[TextMessage(text=f"{weather_info}")]
+            messages=messages
         )
         send_response(event, reply_request)
         return
@@ -2243,21 +2256,20 @@ def get_weather_weatherapi(city):
         return f"❌ 取得天氣資料失敗: {e}"
 
 def get_weather_forecast(city):
-    """ 使用 OpenWeather API 查詢未來 3 天天氣趨勢 """
+    """ 使用 OpenWeather API 查詢未來 3 天天氣趨勢 並產生圖表 """
     # 確保 city 是 OpenWeather 可接受的名稱
     city = CITY_MAPPING.get(city, city)
     url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={OPENWEATHER_API_KEY}&units=metric&lang=zh_tw"
     
-
     try:
         response = requests.get(url)
         data = response.json()
         print("🔍 狀態碼:", response.status_code)
-        print("🔍 回應內容:", response.text)
+        # print("🔍 回應內容:", response.text)
 
         if data.get("cod") != "200":
             print(f"❌ OpenWeather API 錯誤: {data}")
-            return "❌ 無法取得天氣預報，請確認城市名稱是否正確"
+            return "❌ 無法取得天氣預報，請確認城市名稱是否正確", None
 
         daily_forecast = {}
 
@@ -2268,13 +2280,16 @@ def get_weather_forecast(city):
             weather_desc = forecast["weather"][0]["description"]
             wind_speed = forecast["wind"]["speed"]
             humidity = forecast["main"]["humidity"]
+            # 降雨機率欄位 pop，值介於 0~1
+            pop = forecast.get("pop", 0)
 
             if date not in daily_forecast:
                 daily_forecast[date] = {
                     "temp_min": temp,
                     "temp_max": temp,
-                    "humidity": [],
-                    "wind_speed": [],
+                    "humidity": [humidity],
+                    "wind_speed": [wind_speed],
+                    "pop": [pop],
                     "weather_desc": weather_desc
                 }
             else:
@@ -2282,10 +2297,10 @@ def get_weather_forecast(city):
                 daily_forecast[date]["temp_max"] = max(daily_forecast[date]["temp_max"], temp)
                 daily_forecast[date]["humidity"].append(humidity)
                 daily_forecast[date]["wind_speed"].append(wind_speed)
+                daily_forecast[date]["pop"].append(pop)
 
         # 格式化輸出未來 3 天預測
         forecast_text = f"🌍 {city} 未來 3 天天氣趨勢：\n"
-        today = datetime.date.today()
         count = 0
 
         for date, info in daily_forecast.items():
@@ -2293,22 +2308,71 @@ def get_weather_forecast(city):
                 break
             avg_humidity = sum(info["humidity"]) // len(info["humidity"]) if info["humidity"] else 0
             avg_wind_speed = sum(info["wind_speed"]) / len(info["wind_speed"]) if info["wind_speed"] else 0
+            avg_pop = (sum(info["pop"]) / len(info["pop"]) * 100) if info["pop"] else 0  # 百分比表示
             forecast_text += (
                 f"\n📅 {date}:\n"
                 f"🌡 溫度: {info['temp_min']}°C ~ {info['temp_max']}°C\n"
                 f"💧 濕度: {avg_humidity}%\n"
                 f"💨 風速: {avg_wind_speed:.1f} m/s\n"
+                f"🌧 降雨機率: {avg_pop:.0f}%\n"
                 f"🌤 天氣: {info['weather_desc']}\n"
             )
             count += 1
 
-        # 讓 AI 進行天氣分析
+        # 讓 AI 進行天氣分析（參數示範取最後一筆資料）
         ai_analysis = analyze_weather_with_ai(city, temp, humidity, weather_desc, wind_speed)
+        forecast_text += f"\n\n🧑‍🔬 狗蛋關心您：\n{ai_analysis}"
 
-        return f"{forecast_text}\n\n🧑‍🔬 狗蛋關心您：\n{ai_analysis}"
+        # 產生圖表：使用原始預測資料，顯示未來 3 天每 3 小時的預測點
+        import datetime
+        import matplotlib.pyplot as plt
+        import matplotlib.dates as mdates
+
+        chart_times = []
+        chart_temps = []
+        chart_pops = []
+        now = datetime.datetime.now()
+        three_days_later = now + datetime.timedelta(days=3)
+        for forecast in data["list"]:
+            dt = datetime.datetime.strptime(forecast["dt_txt"], "%Y-%m-%d %H:%M:%S")
+            if now <= dt <= three_days_later:
+                chart_times.append(dt)
+                chart_temps.append(forecast["main"]["temp"])
+                chart_pops.append(forecast.get("pop", 0) * 100)  # 轉換成百分比
+
+        # 繪製圖表：x 軸每 6 小時一個刻度
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+        ax1.plot(chart_times, chart_temps, marker="o", color="blue", label="Temp (°C)")
+        ax1.set_xlabel("Date")
+        ax1.set_ylabel("Temp (°C)", color="red")
+        ax1.tick_params(axis="y", labelcolor="red")
+        # 設定 x 軸刻度：每6小時一個刻度，格式顯示「月-日 小時:分鐘」
+        ax1.xaxis.set_major_locator(mdates.HourLocator(interval=6))
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
+        fig.autofmt_xdate()
+
+        # 新增第二條線：降雨機率，並用右側 y 軸顯示
+        ax2 = ax1.twinx()
+        ax2.plot(chart_times, chart_pops, marker="o", color="red", label="Rain (%)")
+        ax2.set_ylabel("Rain (%)", color="blue")
+        ax2.tick_params(axis="y", labelcolor="blue")
+
+        # 合併圖例，顯示在右上角
+        # lines, labels = ax1.get_legend_handles_labels()
+        # lines2, labels2 = ax2.get_legend_handles_labels()
+        # ax2.legend(lines + lines2, labels + labels2, loc="upper right")
+
+        plt.title(f"{city} Forcast in next 3 days")
+        plt.grid(True)
+        plt.tight_layout()
+        chart_filename = f"./static/{city}_weather_chart.png"
+        plt.savefig(chart_filename)
+        plt.close()
+
+        return forecast_text, f"{city}_weather_chart.png"
 
     except requests.exceptions.RequestException as e:
-        return f"❌ 取得天氣資料失敗: {e}"
+        return f"❌ 取得天氣資料失敗: {e}", None
 
 def analyze_weather_with_ai(city, temp, humidity, weather_desc, wind_speed):
     """ 使用 OpenAI 進行天氣分析，提供穿搭 & 注意事項 """
