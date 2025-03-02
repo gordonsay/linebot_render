@@ -78,3 +78,4 @@ pillow
 supabase
 langdetect
 mutagen
+matplotlib
