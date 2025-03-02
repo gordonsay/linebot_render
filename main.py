@@ -51,6 +51,9 @@ VRSS_API_KEY = os.getenv("VRSS_API_KEY")
 NGROK_URL = os.getenv("NGROK_URL")
 NEARBY_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
 GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # 初始化 Spotipy
 spotify_auth = SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET)
@@ -66,6 +69,7 @@ allowed_users_BADEGG_str = os.getenv("ALLOWED_BADEGG_USERS", "")
 ALLOWED_BADEGG_USERS = {uid.strip() for uid in allowed_users_str.split(",") if uid.strip()}
 allowed_groups_BADEGG_str = os.getenv("ALLOWED_BADEGG_GROUPS", "")
 ALLOWED_BADEGG_GROUPS = {gid.strip() for gid in allowed_groups_str.split(",") if gid.strip()}
+max_title_length = 70
 
 # Initailize LINE API (v3)
 config = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
@@ -82,7 +86,7 @@ batch_index = {}  # 追蹤用戶當前批次
 video_list = {}  # 存放不同用戶的完整影片列表
 video_index = {}  # 存放每個用戶目前的影片索引
 user_state = {}
-
+user_mode = {}
 
 # sticker list
 OFFICIAL_STICKERS = [
@@ -426,6 +430,14 @@ CITY_MAPPING = {
     "伊斯坦堡": "Istanbul",
     "莫斯科": "Moscow"
 }
+
+ACTRESS_AV_NAMES = ["三上悠亞", "橋本有菜", "篠田優", "桃乃木香奈", "波多野結衣", "Julia", "天海翼", "葵司", "深田詠美", "明日花綺羅", "小倉由菜", "白石茉莉奈", "夢乃愛華", \
+                    "山岸逢花", "河北彩", "小島南", "相澤南", "涼森玲夢", "架乃由羅", "伊藤舞雪", "藤森里穂", "星宮一花", "櫻空桃", "明里紬", "高橋聖子", "七澤美亞", "楓可憐", \
+                    "岬奈奈美", "八乃翼", "美谷朱里", "水卜櫻", "戶田真琴", "星奈愛", "君島美緒", "佐佐木明希", "松本一香", "石川澪", "東條夏", "小花暖", "倉多真央", "蓮實克蕾兒", "樞木葵", "渚光希"    ]
+
+ACTRESS_AV_SERIES = ["NTR", "人妻", "痴女", "制服", "未亡", "交換", "按摩", "精油", "鄰居", "電車", "遊戲", "面試", \
+                    "眼鏡", "家庭教師", "女上司", "女同學", "秘書", "女僕", "美少女"]
+
 
 LANGUAGE_MAP = {
     "ar": "ar-eg",
@@ -1102,107 +1114,126 @@ def handle_message(event):
         send_response(event, reply_request)
         return
 
-    # (4-j)「狗蛋開車」
-    if ("狗蛋開車") in user_message and ("最熱") not in user_message and ("最新") not in user_message:
-        search_query = user_message.replace("狗蛋開車", "").strip()
+    # # (4-j)「狗蛋開車」
+    # if ("狗蛋開車") in user_message and ("最熱") not in user_message and ("最新") not in user_message:
+    #     search_query = user_message.replace("狗蛋開車", "").strip()
         
-        if not search_query:
-            response_text = "請提供人名，例如：狗蛋開車 狗蛋"
-            reply_request = ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=response_text)]
-            )
-        else:
-            videos = get_video_data(search_query)  # ✅ 爬取影片
-            # print(f"✅ [DEBUG] 爬取結果: {videos}")  # Debugging
+    #     if not search_query:
+    #         response_text = "請提供人名，例如：狗蛋開車 狗蛋"
+    #         reply_request = ReplyMessageRequest(
+    #             reply_token=event.reply_token,
+    #             messages=[TextMessage(text=response_text)]
+    #         )
+    #     else:
+    #         videos = get_video_data(search_query)  # ✅ 爬取影片
+    #         # print(f"✅ [DEBUG] 爬取結果: {videos}")  # Debugging
             
-            if not videos:
-                print("❌ [DEBUG] 爬取結果為空，回傳純文字訊息")
-                response_text = "找不到相關影片。"
-                reply_request = ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=response_text)]
-                )
-            else:
-                flex_message = create_flex_jable_message(user_id, group_id, videos)   # ✅ 生成 FlexMessage
+    #         if not videos:
+    #             print("❌ [DEBUG] 爬取結果為空，回傳純文字訊息")
+    #             response_text = "找不到相關影片。"
+    #             reply_request = ReplyMessageRequest(
+    #                 reply_token=event.reply_token,
+    #                 messages=[TextMessage(text=response_text)]
+    #             )
+    #         else:
+    #             flex_message = create_flex_jable_message(user_id, group_id, videos)   # ✅ 生成 FlexMessage
                 
-                if flex_message is None:  # **確保 flex_message 不為 None**
-                    print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
-                    response_text = "找不到相關影片。"
-                    reply_request = ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(text=response_text)]
-                    )
-                else:
-                    # print(f"✅ [DEBUG] 生成的 FlexMessage: {flex_message}")
-                    reply_request = ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=[flex_message]
-                    )
-        send_response(event, reply_request)  
-        return  
+    #             if flex_message is None:  # **確保 flex_message 不為 None**
+    #                 print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
+    #                 response_text = "找不到相關影片。"
+    #                 reply_request = ReplyMessageRequest(
+    #                     reply_token=event.reply_token,
+    #                     messages=[TextMessage(text=response_text)]
+    #                 )
+    #             else:
+    #                 # print(f"✅ [DEBUG] 生成的 FlexMessage: {flex_message}")
+    #                 reply_request = ReplyMessageRequest(
+    #                     reply_token=event.reply_token,
+    #                     messages=[flex_message]
+    #                 )
+    #     send_response(event, reply_request)  
+    #     return  
 
-    # (4-k)「狗蛋開車最熱」
-    if ("狗蛋開車") in user_message and ("最熱") in user_message:
-        videos = get_video_data_hotest()  # ✅ 爬取影片
-        print(f"✅ [DEBUG] 爬取結果: {videos}")  # Debugging
+    # # (4-k)「狗蛋開車最熱」
+    # if ("狗蛋開車") in user_message and ("最熱") in user_message:
+    #     videos = get_video_data_hotest()  # ✅ 爬取影片
+    #     print(f"✅ [DEBUG] 爬取結果: {videos}")  # Debugging
             
-        if not videos:
-            print("❌ [DEBUG] 爬取結果為空，回傳純文字訊息")
-            response_text = "找不到相關影片。"
-            reply_request = ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=response_text)]
-            )
-        else:
-            flex_message = create_flex_jable_message(user_id, group_id, videos)   # ✅ 生成 FlexMessage
+    #     if not videos:
+    #         print("❌ [DEBUG] 爬取結果為空，回傳純文字訊息")
+    #         response_text = "找不到相關影片。"
+    #         reply_request = ReplyMessageRequest(
+    #             reply_token=event.reply_token,
+    #             messages=[TextMessage(text=response_text)]
+    #         )
+    #     else:
+    #         flex_message = create_flex_jable_message(user_id, group_id, videos)   # ✅ 生成 FlexMessage
                 
-            if flex_message is None:  # **確保 flex_message 不為 None**
-                print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
-                response_text = "找不到相關影片。"
-                reply_request = ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=response_text)]
-                )
-            else:
-                # print(f"✅ [DEBUG] 生成的 FlexMessage: {flex_message}")
-                reply_request = ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[flex_message]
-                )
-        send_response(event, reply_request)  
-        return  
+    #         if flex_message is None:  # **確保 flex_message 不為 None**
+    #             print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
+    #             response_text = "找不到相關影片。"
+    #             reply_request = ReplyMessageRequest(
+    #                 reply_token=event.reply_token,
+    #                 messages=[TextMessage(text=response_text)]
+    #             )
+    #         else:
+    #             # print(f"✅ [DEBUG] 生成的 FlexMessage: {flex_message}")
+    #             reply_request = ReplyMessageRequest(
+    #                 reply_token=event.reply_token,
+    #                 messages=[flex_message]
+    #             )
+    #     send_response(event, reply_request)  
+    #     return  
     
-    # (4-m)「狗蛋開車最新」
-    if ("狗蛋開車") in user_message and ("最新") in user_message:
-        videos = get_video_data_newest()  # ✅ 爬取影片
-        print(f"✅ [DEBUG] 爬取結果: {videos}")  # Debugging
+    # # (4-m)「狗蛋開車最新」
+    # if ("狗蛋開車") in user_message and ("最新") in user_message:
+    #     videos = get_video_data_newest()  # ✅ 爬取影片
+    #     print(f"✅ [DEBUG] 爬取結果: {videos}")  # Debugging
             
-        if not videos:
-            print("❌ [DEBUG] 爬取結果為空，回傳純文字訊息")
-            response_text = "找不到相關影片。"
-            reply_request = ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=response_text)]
-            )
-        else:
-            flex_message = create_flex_jable_message(user_id, group_id, videos)   # ✅ 生成 FlexMessage
+    #     if not videos:
+    #         print("❌ [DEBUG] 爬取結果為空，回傳純文字訊息")
+    #         response_text = "找不到相關影片。"
+    #         reply_request = ReplyMessageRequest(
+    #             reply_token=event.reply_token,
+    #             messages=[TextMessage(text=response_text)]
+    #         )
+    #     else:
+    #         flex_message = create_flex_jable_message(user_id, group_id, videos)   # ✅ 生成 FlexMessage
                 
-            if flex_message is None:  # **確保 flex_message 不為 None**
-                print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
-                response_text = "找不到相關影片。"
-                reply_request = ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=response_text)]
-                )
-            else:
-                # print(f"✅ [DEBUG] 生成的 FlexMessage: {flex_message}")
-                reply_request = ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[flex_message]
-                )
-        send_response(event, reply_request)  
-        return 
+    #         if flex_message is None:  # **確保 flex_message 不為 None**
+    #             print("❌ [DEBUG] FlexMessage 生成失敗，回傳純文字")
+    #             response_text = "找不到相關影片。"
+    #             reply_request = ReplyMessageRequest(
+    #                 reply_token=event.reply_token,
+    #                 messages=[TextMessage(text=response_text)]
+    #             )
+    #         else:
+    #             # print(f"✅ [DEBUG] 生成的 FlexMessage: {flex_message}")
+    #             reply_request = ReplyMessageRequest(
+    #                 reply_token=event.reply_token,
+    #                 messages=[flex_message]
+    #             )
+    #     send_response(event, reply_request)  
+    #     return 
+
+    # 「狗蛋開車」時
+    if user_message == "狗蛋開車":
+        videos = get_latest_videos_from_database()
+
+        if not videos:
+            reply_request = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text="目前沒有新影片，請稍後再試！")]
+            )
+            send_response(event, reply_request)
+        else:
+            flex_message = create_flex_jable_message(user_id, videos)
+            reply_request = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[flex_message]
+            )
+            send_response(event, reply_request)
+            return
 
     # (4-n)「狗蛋推片」
     if user_message == "狗蛋推片":
@@ -1612,15 +1643,114 @@ def handle_postback(event):
         return
 
     # ✅ **處理影片批次切換**
-    if data.startswith("change_batch|"):
-        user_id = data.split("|")[1]
+    # 存儲使用者模式，避免換一批時按鈕變回預設
+    if data.startswith("change_actress|"):
+        _, user_id, actress_name = data.split("|")
 
-        if user_id in batch_index:
-            batch_index[user_id] = (batch_index[user_id] + 1) % 4  # **循環批次 0 → 1 → 2 → 3 → 0**
+        # **拉取對應演員的影片**
+        videos = get_videos_from_database(actress_name, max_title_length)
+
+        if not videos:
+            reply_req = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text=f"抱歉，演員「{actress_name}」目前沒有影片！")]
+            )
+            messaging_api.reply_message(reply_req)
+            return
+
+        # ✅ **如果有影片，則更新批次**
+        video_batches[user_id] = [videos[i:i+3] for i in range(0, len(videos), 3)]
+        batch_index[user_id] = 0
+
+        # ✅ **刷新 user_mode 為當前演員**
+        user_mode[user_id] = "actress"
 
         reply_req = ReplyMessageRequest(
             replyToken=event.reply_token,
-            messages=[generate_flex_message(user_id)]
+            messages=[generate_flex_message(user_id, mode="actress")]
+        )
+        messaging_api.reply_message(reply_req)
+        return
+
+    elif data.startswith("change_series|"):
+        _, user_id, series_name = data.split("|")
+
+        # **拉取對應系列的影片**
+        videos = get_videos_from_database_series(series_name, max_title_length)
+
+        if not videos:
+            reply_req = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text=f"抱歉，系列「{series_name}」目前沒有影片！")]
+            )
+            messaging_api.reply_message(reply_req)
+            return
+
+        # ✅ **如果有影片，則更新批次**
+        video_batches[user_id] = [videos[i:i+3] for i in range(0, len(videos), 3)]
+        batch_index[user_id] = 0
+
+        # ✅ **刷新 user_mode 為當前系列**
+        user_mode[user_id] = "series"
+
+        reply_req = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[generate_flex_message(user_id, mode="series")]
+        )
+        messaging_api.reply_message(reply_req)
+        return
+
+    if data.startswith("change_batch|"):
+        user_id = data.split("|")[1]
+
+        if user_id in video_batches and user_id in batch_index:
+            total_batches = len(video_batches[user_id])
+            batch_index[user_id] = (batch_index[user_id] + 1) % total_batches  # 循環播放影片
+
+        # ✅ **維持使用者的 mode 狀態**
+        current_mode = user_mode.get(user_id, "latest")
+
+        reply_req = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[generate_flex_message(user_id, mode=current_mode)]  # ✅ 不重置 mode
+        )
+        messaging_api.reply_message(reply_req)
+        return
+
+    elif data.startswith("change_popular|"):
+        user_id = data.split("|")[1]
+
+        # **拉取熱門影片**
+        videos = get_hotest_videos_from_database()
+        if videos:
+            video_batches[user_id] = [videos[i:i+3] for i in range(0, len(videos), 3)]
+            batch_index[user_id] = 0
+
+        # ✅ **設定 mode="popular"，直到使用者切換回最新**
+        user_mode[user_id] = "popular"
+
+        reply_req = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[generate_flex_message(user_id, mode="popular")]
+        )
+        messaging_api.reply_message(reply_req)
+        return
+
+    elif data.startswith("change_latest|"):
+        user_id = data.split("|")[1]
+
+        # **拉取最新影片**
+        videos = get_latest_videos_from_database()
+        if videos:
+            video_batches[user_id] = [videos[i:i+3] for i in range(0, len(videos), 3)]
+            batch_index[user_id] = 0
+
+        # ✅ **設定 mode="latest"，直到使用者切換回熱門**
+        user_mode[user_id] = "latest"
+
+        reply_req = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[generate_flex_message(user_id, mode="latest")]
         )
         messaging_api.reply_message(reply_req)
         return
@@ -2898,40 +3028,38 @@ def create_flex_jable_message_nopic(videos):
 #     flex_contents = FlexContainer.from_json(flex_json_str)  # ✅ 解析 JSON 字串
 #     return FlexMessage(alt_text="搜尋結果", contents=flex_contents)
 
-def create_flex_jable_message(user_id, group_id, videos):
-    global video_list, video_index  # ✅ 確保變數存在
-    session_id = group_id if group_id else user_id  # ✅ **群組內共享影片，私訊獨立**
+def create_flex_jable_message(user_id, videos):
+    global video_batches, batch_index
 
     if not videos:
         return TextMessage(text="找不到相關影片，請嘗試其他關鍵字。")
 
-    # ✅ **存完整影片列表**
-    video_list[session_id] = videos
-    video_index[session_id] = [0, 1]  # **確保是 [idx1, idx2]，而不是 int**
-    
-    return generate_flex_message(session_id)
+    # ✅ **將 影片拆成組，每組 3 部**
+    video_batches[user_id] = [videos[i:i+3] for i in range(0, len(videos), 3)]
+    batch_index[user_id] = 0  # **初始化顯示第一組**
 
-def generate_flex_message(session_id):
-    """ 根據當前索引，生成對應的 FlexMessage """
-    global video_list, video_index  # ✅ 避免變數未定義錯誤
+    return generate_flex_message(user_id)
 
-    if session_id not in video_list or session_id not in video_index:
+def generate_flex_message(user_id, mode="latest"):
+    """ 根據當前批次，生成對應的 FlexMessage """
+    global video_batches, batch_index
+
+    if user_id not in video_batches:
         return TextMessage(text="請先搜尋影片！")
 
-    videos = video_list[session_id]
-    total_videos = len(videos)
+    batch = video_batches[user_id][batch_index[user_id]]
 
-    if total_videos < 2:
-        return TextMessage(text="影片數量太少，無法播放！")
+    # ✅ **隨機選擇一個人名**
+    random_actress = get_random_actress()
 
-    # ✅ **取得當前要顯示的兩部影片**
-    idx1, idx2 = video_index[session_id]
+    # ✅ **隨機選擇一個 AV 系列**
+    random_series = get_random_series()
 
-    video1 = videos[idx1]
-    video2 = videos[idx2]
+    # ✅ **獲取最新的 scraped_at（YYYY-MM-DD）**
+    latest_scraped_at = get_latest_scraped_at()
 
     contents = []
-    for i, video in enumerate([video1, video2]):
+    for video in batch:
         bubble = {
             "type": "bubble",
             "hero": {
@@ -2971,20 +3099,93 @@ def generate_flex_message(session_id):
                             "label": "觀看影片",
                             "uri": video["link"]
                         }
-                    },
-                    {
-                        "type": "button",
-                        "style": "secondary",
-                        "action": {
-                            "type": "postback",
-                            "label": "換一部",
-                            "data": f"change_video|{session_id}|{i}"
-                        }
                     }
                 ]
             }
         }
         contents.append(bubble)
+
+    # ✅ **按使用者當前的 mode 變更按鈕**
+    change_label = "換熱門" if mode == "latest" else "換最新"
+    change_data = f"change_popular|{user_id}" if mode == "latest" else f"change_latest|{user_id}"
+
+    button_bubble = {
+        "type": "bubble",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "height": "300px",
+            "justifyContent": "space-between",
+            "contents": [
+                {
+                    "type": "button",
+                    "style": "secondary",
+                    "flex": 1,
+                    "action": {
+                        "type": "postback",
+                        "label": "換一批",
+                        "data": f"change_batch|{user_id}"
+                    }
+                },
+                {
+                    "type": "button",
+                    "style": "secondary",
+                    "flex": 1,
+                    "action": {
+                        "type": "postback",
+                        "label": change_label,
+                        "data": change_data
+                    }
+                },
+                {
+                    "type": "button",  # ✅ **隨機演員按鈕**
+                    "style": "secondary",
+                    "flex": 1,
+                    "action": {
+                        "type": "postback",
+                        "label": random_actress,  # ✅ **顯示隨機人名**
+                        "data": f"change_actress|{user_id}|{random_actress}"  # ✅ **帶入人名**
+                    }
+                },
+                {
+                    "type": "button",  # ✅ **隨機系列按鈕**
+                    "style": "secondary",
+                    "flex": 1,
+                    "action": {
+                        "type": "postback",
+                        "label": random_series,  # ✅ **顯示隨機系列**
+                        "data": f"change_series|{user_id}|{random_series}"  # ✅ **帶入系列名稱**
+                    }
+                },
+                {
+                    "type": "box",  # ✅ **圖片 + Last Update**
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "image",
+                            "url": f"{BASE_URL}/static/badegg.png",
+                            "size": "md",
+                            "aspectRatio": "16:9",
+                            "aspectMode": "cover",
+                            "alignSelf": "flex-start",
+                            "margin": "md"
+                        },
+                        {
+                            "type": "text",
+                            "text": f"Last Update: {latest_scraped_at}",
+                            "size": "xs",
+                            "color": "#888888",
+                            "align": "center",
+                            "margin": "md",
+                            "wrap": True
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+
+    contents.append(button_bubble)
 
     flex_message_content = {
         "type": "carousel",
@@ -2993,8 +3194,7 @@ def generate_flex_message(session_id):
 
     flex_json_str = json.dumps(flex_message_content)
     flex_contents = FlexContainer.from_json(flex_json_str)
-    
-    return FlexMessage(alt_text="影片更新成功", contents=flex_contents)  # ✅ **確保 alt_text 一致**
+    return FlexMessage(alt_text="搜尋結果", contents=flex_contents)
 
 def text_to_speech(text: str, rate: int = 0) -> bytes:
     """
@@ -3100,6 +3300,82 @@ def get_google_maps_link(lat, lng, place_name):
     """
     query = f"{lat},{lng}"
     return f"https://www.google.com/maps/search/?api=1&query={query}"
+
+def get_latest_videos_from_database():
+    response = supabase.table("videos_latest").select("title, link, thumbnail").order("scraped_at", desc=True).execute()
+    # return response.data if response.data else []
+    if not response.data:
+        return []
+
+    # ✅ **限制 title 長度**
+    for video in response.data:
+        if len(video["title"]) > max_title_length:
+            video["title"] = video["title"][:max_title_length] + "..."  # **截取並加上 `...`**
+
+    return response.data
+
+def get_hotest_videos_from_database():
+    response = supabase.table("videos_hotest").select("title, link, thumbnail").order("scraped_at", desc=True).execute()
+    # return response.data if response.data else []
+    if not response.data:
+        return []
+
+    # ✅ **限制 title 長度**
+    for video in response.data:
+        if len(video["title"]) > max_title_length:
+            video["title"] = video["title"][:max_title_length] + "..."  # **截取並加上 `...`**
+
+    return response.data
+
+def get_videos_from_database(search_name, max_title_length):
+    """ 從資料庫獲取影片，並限制標題長度 """
+    response = supabase.table(f"videos_index_{search_name}").select("title, link, thumbnail").order("scraped_at", desc=True).execute()
+    
+    if not response.data:
+        return []
+
+    # ✅ **限制 title 長度**
+    for video in response.data:
+        if len(video["title"]) > max_title_length:
+            video["title"] = video["title"][:max_title_length] + "..."  # **截取並加上 `...`**
+
+    return response.data
+
+def get_videos_from_database_series(search_name, max_title_length):
+    """ 從資料庫獲取影片，並限制標題長度 """
+    response = supabase.table(f"videos_series_{search_name}").select("title, link, thumbnail").order("scraped_at", desc=True).execute()
+    
+    if not response.data:
+        return []
+
+    # ✅ **限制 title 長度**
+    for video in response.data:
+        if len(video["title"]) > max_title_length:
+            video["title"] = video["title"][:max_title_length] + "..."  # **截取並加上 `...`**
+
+    return response.data
+
+def get_random_actress():
+    """ 隨機選擇一位演員 """
+    return random.choice(ACTRESS_AV_NAMES)
+
+def get_random_series():
+    return random.choice(ACTRESS_AV_SERIES)
+
+from datetime import datetime  # ✅ 正確匯入
+
+def get_latest_scraped_at():
+    """ 獲取資料庫內最新的 scraped_at 時間，並轉換為 YYYY-MM-DD 格式 """
+    response = supabase.table("videos_latest").select("scraped_at").order("scraped_at", desc=True).limit(1).execute()
+    
+    if not response.data:
+        return "N/A"
+    
+    # ✅ **正確使用 `datetime.strptime()`**
+    scraped_at = response.data[0]["scraped_at"]
+    return datetime.strptime(scraped_at, "%Y-%m-%dT%H:%M:%S.%f").strftime("%Y-%m-%d")
+
+
 
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 5000))  # 使用 Render 提供的 PORT
