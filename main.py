@@ -465,6 +465,8 @@ LANGUAGE_MAP = {
 
 # Record AI model choosen by User
 user_ai_choice = {}
+# Record AI model choosen by User
+user_personality_choice = {}
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -502,14 +504,16 @@ def handle_follow(event):
     command_list = (
             "📝 支援的指令：\n"
             "1. 換模型: 更換 AI 語言模型 \n\t\t（預設為 Deepseek-R1）\n"
-            "2. 給我id: 顯示 LINE 個人 ID\n"
-            "3. 群組id: 顯示 LINE 群組 ID\n"
-            "4. 狗蛋出去: 機器人離開群組\n"
-            "5. 當前模型: 機器人現正使用的模型\n"
-            "6. 狗蛋生成: 生成圖片\n"
-            "7. 我要翻譯: 翻譯語言\n"
-            "8. 停止翻譯: 停止翻譯\n"
-            "9. 狗蛋情勒 狗蛋的超能力"
+            "2. 換人格: 更換 AI 人格 \n\t\t（預設為 正宗狗蛋）\n"
+            "3. 狗蛋出去: 機器人離開群組\n"
+            "4. 當前模型: 機器人現正使用的模型\n"
+            "5. 狗蛋生成: 生成圖片\n"
+            "6. 狗蛋介紹: 人物或角色的說明\n\t\t (僅供參考) \n"
+            "7. 狗蛋搜圖: 即時搜圖\n"
+            "8. 狗蛋唱歌: 串連Spotify試聽\n"
+            "9. 狗蛋氣象: 確認當前天氣\n"
+            "10. 狗蛋預報: 確認三天天氣預報\n"
+            "11. 狗蛋情勒: 狗蛋的超能力"
         )
     reply_request = ReplyMessageRequest(
         replyToken=event.reply_token,
@@ -711,6 +715,12 @@ def handle_message(event):
     else:
         ai_model = user_ai_choice.get(user_id, "deepseek-r1-distill-llama-70b")
 
+    # 檢查目前選用的 AI 人格
+    if group_id and group_id in user_personality_choice:
+        ai_model = user_personality_choice[group_id]
+    else:
+        ai_model = user_personality_choice.get(user_id, "normal_egg")
+
     print(f"📢 [DEBUG] {user_id if not group_id else group_id} 當前模型: {ai_model}")
 
     # (1) 「給我id」：若訊息中同時包含「給我」和「id」
@@ -764,15 +774,16 @@ def handle_message(event):
         command_list = (
             "📝 支援的指令：\n"
             "1. 換模型: 更換 AI 語言模型 \n\t\t（預設為 Deepseek-R1）\n"
-            "2. 狗蛋出去: 機器人離開群組\n"
-            "3. 當前模型: 機器人現正使用的模型\n"
-            "4. 狗蛋生成: 生成圖片\n"
-            "5. 狗蛋介紹: 人物或角色的說明\n\t\t (僅供參考) \n"
-            "6. 狗蛋搜圖: 即時搜圖\n"
-            "7. 狗蛋唱歌: 串連Spotify試聽\n"
-            "8. 狗蛋氣象: 確認當前天氣\n"
-            "9. 狗蛋預報: 確認三天天氣預報\n"
-            "10. 狗蛋情勒: 狗蛋的超能力"
+            "2. 換人格: 更換 AI 人格 \n\t\t（預設為 正宗狗蛋）\n"
+            "3. 狗蛋出去: 機器人離開群組\n"
+            "4. 當前模型: 機器人現正使用的模型\n"
+            "5. 狗蛋生成: 生成圖片\n"
+            "6. 狗蛋介紹: 人物或角色的說明\n\t\t (僅供參考) \n"
+            "7. 狗蛋搜圖: 即時搜圖\n"
+            "8. 狗蛋唱歌: 串連Spotify試聽\n"
+            "9. 狗蛋氣象: 確認當前天氣\n"
+            "10. 狗蛋預報: 確認三天天氣預報\n"
+            "11. 狗蛋情勒: 狗蛋的超能力"
         )
         reply_request = ReplyMessageRequest(
             replyToken=event.reply_token,
@@ -867,14 +878,18 @@ def handle_message(event):
             model = user_ai_choice[group_id]
         else:
             model = user_ai_choice.get(user_id, "Deepseek-R1")
-        reply_text = f"🤖 現在使用的 AI 模型是：\n{model}"
+        if group_id and group_id in user_personality_choice:
+            personality = user_personality_choice[group_id]
+        else:
+            personality = user_personality_choice.get(user_id, "正宗狗蛋")
+        reply_text = f"🤖 \n現在使用的 AI 模型是：\n{model}\n現在使用的 AI 人格是：\n{personality}"
         reply_request = ReplyMessageRequest(
             replyToken=event.reply_token,
             messages=[TextMessage(text=reply_text)]
         )
         send_response(event, reply_request)
         return
-
+    
     # (4-c) 「換模型」
     if "換" in user_message and "模型" in user_message:
         # 若此事件來自語音，則改用 push_message
@@ -885,6 +900,16 @@ def handle_message(event):
             send_ai_selection_menu(event.reply_token)
         return
     
+    # (4-cc) 「狗蛋人格」
+    if "人格" in user_message and "換" in user_message :
+        # 若此事件來自語音，則改用 push_message
+        if getattr(event, "_is_audio", False):
+            target = event.source.group_id if event.source.type == "group" else event.source.user_id
+            send_ai_properties_menu(event.reply_token, target, use_push=True)
+        else:
+            send_ai_properties_menu(event.reply_token)
+        return
+
     # (4-e)「狗蛋搜尋」指令：搜尋 + AI 總結
     if user_message.startswith("狗蛋搜尋"):
         search_query = user_message.replace("狗蛋搜尋", "").strip()
@@ -1333,6 +1358,13 @@ def handle_message(event):
             ai_model = "deepseek-r1-distill-llama-70b"
     else:
         ai_model = user_ai_choice.get(user_id, "deepseek-r1-distill-llama-70b")
+    if event.source.type == "group":
+        if group_id and group_id in user_personality_choice:
+            ai_personality = user_personality_choice[group_id]
+        else:
+            ai_personality = "normal_egg"
+    else:
+        ai_personality = user_personality_choice.get(user_id, "normal_egg")
     
     # history = get_recent_chat_history(user_id)
     # prompt = f"following contents is history : {history}, according to history, this is my input:{user_message}"
@@ -1505,11 +1537,8 @@ def handle_location_message(event):
 # Post Handler
 @handler.add(PostbackEvent)
 def handle_postback(event):
-    global video_list, video_index  # ✅ 確保變數存在
-
     user_id = event.source.user_id
     group_id = event.source.group_id if event.source.type == "group" else None
-    session_id = group_id if group_id else user_id  # ✅ **群組內共享影片，私訊獨立**
     data = event.postback.data
 
     # ✅ **處理 AI 模型選擇**
@@ -1531,50 +1560,39 @@ def handle_postback(event):
         )
         messaging_api.reply_message(reply_req)
         return
+    
+    personality_map = {
+        "personality_normal": "normal_egg",
+        "personality_sad": "sad_egg",
+        "personality_angry": "angry_egg",
+        "personality_sowhat": "sowhat_egg"
+    }
 
-    # ✅ **處理影片切換**
-    if data.startswith("change_video|"):
-        _, session_id, video_slot = data.split("|")
-        video_slot = int(video_slot)
-
-        if session_id not in video_list or session_id not in video_index:
-            reply_req = ReplyMessageRequest(
-                replyToken=event.reply_token,
-                messages=[TextMessage(text="影片列表不存在，請重新搜尋。")]
-            )
-            messaging_api.reply_message(reply_req)
-            return
-
-        videos = video_list.get(session_id, [])  # ✅ 確保 videos 存在
-        total_videos = len(videos)
-
-        if total_videos < 2:
-            reply_req = ReplyMessageRequest(
-                replyToken=event.reply_token,
-                messages=[TextMessage(text="影片數量不足，無法替換！")]
-            )
-            messaging_api.reply_message(reply_req)
-            return
-
-        idx1, idx2 = video_index[session_id]
-
-        if video_slot == 0:  # **換左邊的影片**
-            new_idx1 = (idx1 + 1) % total_videos
-            while new_idx1 == idx2:  # **確保不與右邊重疊**
-                new_idx1 = (new_idx1 + 1) % total_videos
-            video_index[session_id][0] = new_idx1
-        else:  # **換右邊的影片**
-            new_idx2 = (idx2 + 1) % total_videos
-            while new_idx2 == idx1:  # **確保不與左邊重疊**
-                new_idx2 = (new_idx2 + 1) % total_videos
-            video_index[session_id][1] = new_idx2
-
-        # ✅ **直接用 `reply_message` 更新當前 `FlexMessage`**
-        updated_flex = generate_flex_message(session_id)
+    if data in personality_map:
+        if group_id:
+            user_personality_choice[group_id] = personality_map[data]
+        else:
+            user_personality_choice[user_id] = personality_map[data]
 
         reply_req = ReplyMessageRequest(
             replyToken=event.reply_token,
-            messages=[updated_flex]  # ✅ **讓 LINE 視為「同一則訊息」的變更**
+            messages=[
+                TextMessage(text=f"已選擇個性: {personality_map[data]}！\n\n🔄 輸入「換個性」可重新選擇")
+            ]
+        )
+        messaging_api.reply_message(reply_req)
+        return
+
+    # ✅ **處理影片批次切換**
+    if data.startswith("change_batch|"):
+        user_id = data.split("|")[1]
+
+        if user_id in batch_index:
+            batch_index[user_id] = (batch_index[user_id] + 1) % 4  # **循環批次 0 → 1 → 2 → 3 → 0**
+
+        reply_req = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[generate_flex_message(user_id)]
         )
         messaging_api.reply_message(reply_req)
         return
@@ -1690,7 +1708,109 @@ def send_ai_selection_menu(reply_token, target=None, use_push=False):
     except Exception as e:
         print(f"❌ FlexMessage Error: {e}")
 
-def ask_groq(user_message, model, retries=3, backoff_factor=1.0):
+def send_ai_properties_menu(reply_token, target=None, use_push=False):
+    """發送 AI 選擇選單"""
+    flex_contents_json = {
+        "type": "carousel",
+        "contents": [
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/dogegg.jpg",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "text", "text": "正宗狗蛋", "weight": "bold", "size": "xl", "align": "center"},
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Choose", "data": "personality_normal"}}
+                    ]
+                }
+            },
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/sowhategg.png",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "text", "text": "SoWhat狗蛋", "weight": "bold", "size": "xl", "align": "center"},
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Choose", "data": "personality_sowhat"}}
+                    ]
+                }
+            },
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/angryegg.png",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "text", "text": "Angry狗蛋", "weight": "bold", "size": "xl", "align": "center"},
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Choose", "data": "personality_angry"}}
+                    ]
+                }
+            },
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/sadegg.png",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "text", "text": "Sadage狗蛋", "weight": "bold", "size": "xl", "align": "center"},
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Choose", "data": "personality_sad"}}
+                    ]
+                }
+            },
+        ]
+    }
+
+    try:
+        # 將 flex JSON 轉為字串，再解析成 FlexContainer
+        flex_json_str = json.dumps(flex_contents_json)
+        flex_contents = FlexContainer.from_json(flex_json_str)
+        flex_message = FlexMessage(
+            alt_text="請選擇 AI 模型",
+            contents=flex_contents
+        )
+        reply_request = ReplyMessageRequest(
+            replyToken=reply_token,
+            messages=[
+                TextMessage(text="你好，我是狗蛋🐶 ！\n請選擇 AI 模型後發問。"),
+                flex_message
+            ]
+        )
+        if use_push and target:
+            push_request = PushMessageRequest(
+                to=target,
+                messages=reply_request.messages
+            )
+            messaging_api.push_message(push_request)
+        else:
+            messaging_api.reply_message(reply_request)
+    except Exception as e:
+        print(f"❌ FlexMessage Error: {e}")
+
+def ask_groq(user_message, model, ai_personality, retries=3, backoff_factor=1.0):
     """
     根據選擇的模型執行不同的 API：
       - 如果 model 為 "gpt-4o" 或 "gpt_4o_mini"，則呼叫 OpenAI API（原有邏輯）
@@ -1698,6 +1818,16 @@ def ask_groq(user_message, model, retries=3, backoff_factor=1.0):
       - 否則使用 Groq API，並加入重試機制避免連線錯誤。
     """
     print(f"[ask_groq] 模型參數: {model}")
+    print(f"[ask_groq] 人格參數: {ai_personality}")
+
+    if ai_personality == "normal_egg":
+        Prompt_default = "你是一個名叫狗蛋的助手，只能使用繁體中文精簡跟朋友的語氣回答"
+    elif ai_personality == "sowhat_egg":
+        Prompt_default = "你是一個名叫狗蛋的助手，只能使用繁體中文, 所有回答都非常厭世悲觀且精簡; 例如：都可以啦反正也不太重要"
+    elif ai_personality == "angry_egg":
+        Prompt_default = "你是一個名叫狗蛋的助手，只能使用繁體中文, 所有回答都非常生氣激動且精簡; 例如：你每次都這樣說， 還不是發生了, 現在你看阿"
+    elif ai_personality == "sad_egg":
+        Prompt_default = "你是一個名叫狗蛋的助手，只能使用繁體中文, 所有回答都非常悲傷惆悵且精簡; 例如：這樣會不會情況很糟糕阿, 都是我的錯"
 
     for i in range(retries):
         try:
@@ -1706,7 +1836,7 @@ def ask_groq(user_message, model, retries=3, backoff_factor=1.0):
                 openai_client = openai.ChatCompletion.create(
                     model="gpt-4o-mini",
                     messages=[
-                        {"role": "user", "content": "你是一個名叫狗蛋的助手，盡量只使用繁體中文精簡跟朋友的語氣回答, 約莫50字內，限制不超過80字，除非當請求為翻譯時, 全部內容都需要完成翻譯不殘留原語言。"},
+                        {"role": "user", "content": f"{Prompt_default}, 約莫50字內，限制不超過80字，除非當請求為翻譯時, 全部內容都需要完成翻譯不殘留原語言。"},
                         {"role": "user", "content": user_message}
                     ]
                 )
@@ -1730,7 +1860,7 @@ def ask_groq(user_message, model, retries=3, backoff_factor=1.0):
                 # Groq API，加入重試機制
                 chat_completion = client.chat.completions.create(
                     messages=[
-                        {"role": "system", "content": "你是一個名叫狗蛋的助手，跟使用者是朋友關係, 盡量只使用繁體中文方式進行回答, 約莫50字內，限制不超過80字, 除非當請求為翻譯時, 全部內容都需要完成翻譯不殘留原語言。"},
+                        {"role": "system", "content": f"{Prompt_default}，約莫50字內，限制不超過80字，除非當請求為翻譯時, 全部內容都需要完成翻譯不殘留原語言。"},
                         {"role": "user", "content": user_message},
                     ],
                     model=model.lower(),
