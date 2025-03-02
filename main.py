@@ -1315,29 +1315,46 @@ def handle_message(event):
     if user_message.startswith("狗蛋找店"):
         user_state[user_id] = {}
         parts = user_message.split(" ", 1)
+
         if len(parts) > 1:
-            # 指令中已包含店面類型
-            store_type = parts[1].strip()
-            user_state[user_id]["store_type"] = store_type
-            user_state[user_id]["step"] = "awaiting_location"
-            reply_text = f"請分享目前的位置, 讓我幫你找 {store_type}。"
-            quick_reply = QuickReply(
-                items=[QuickReplyItem(action=LocationAction(label="分享目前位置"))]
-            )
-            reply_request = ReplyMessageRequest(
-                replyToken=event.reply_token,
-                messages=[TextMessage(text=reply_text, quick_reply=quick_reply)]
-            )
-            send_response(event, reply_request)
-        else:
-            # 未附帶店面類型，先詢問想找哪種店面
-            user_state[user_id]["step"] = "awaiting_store_type"
-            reply_text = "(´ᴥ`) 想找什麼店？讓我來嗅嗅看"
-            reply_request = ReplyMessageRequest(
-                replyToken=event.reply_token,
-                messages=[TextMessage(text=reply_text)]
-            )
-            send_response(event, reply_request)
+            # 提取用戶輸入的店名
+            location_name = parts[1].strip()
+
+            # 嘗試取得座標
+            lat, lng = geocode_location(location_name)
+
+            if lat and lng:
+                # 生成 Google Maps 連結
+                maps_url = get_google_maps_link(lat, lng, location_name)
+
+                reply_text = (
+                    f"📍 {location_name} 的位置：\n"
+                    f"🗺️ [Google 地圖連結]({maps_url})"
+                )
+
+                reply_request = ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[TextMessage(text=reply_text)]
+                )
+                send_response(event, reply_request)
+                return
+            else:
+                reply_text = f"😕 找不到 **{location_name}**，請試著提供更完整的店名或地址。"
+                reply_request = ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[TextMessage(text=reply_text)]
+                )
+                send_response(event, reply_request)
+                return
+
+        # 若沒有輸入店名，詢問使用者店家類型
+        user_state[user_id]["step"] = "awaiting_store_type"
+        reply_text = "(´ᴥ`) 想找什麼店？讓我來嗅嗅看"
+        reply_request = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[TextMessage(text=reply_text)]
+        )
+        send_response(event, reply_request)
         return
 
     # 如果目前狀態等待輸入店面類型
@@ -3076,6 +3093,13 @@ def search_nearby_location(latitude, longitude, store_type):
             reply_text += f"{i}. {name} - {address}\n{maps_url}\n\n"
         return reply_text
     return f"抱歉，附近找不到相關 {store_type}！"
+
+def get_google_maps_link(lat, lng, place_name):
+    """
+    根據經緯度生成 Google Maps 連結
+    """
+    query = f"{lat},{lng}"
+    return f"https://www.google.com/maps/search/?api=1&query={query}"
 
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 5000))  # 使用 Render 提供的 PORT
