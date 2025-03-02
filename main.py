@@ -1265,49 +1265,48 @@ def handle_message(event):
 
     # (4-x) 狗蛋找店
     if user_message.startswith("狗蛋找店"):
-            # 建立該使用者的狀態記錄
-            user_state[user_id] = {}
-            parts = user_message.split(" ", 1)
-            if len(parts) > 1:
-                # 如果指令中已包含店面類型
-                store_type = parts[1]
-                user_state[user_id]["store_type"] = store_type
-                user_state[user_id]["step"] = "awaiting_location"
-                reply_text = f"請分享目前的位置, 讓我幫你找 {store_type}。"
-                quick_reply = QuickReply(
-                    items=[QuickReplyItem(action=LocationAction(label="分享目前位置"))]
-                )
-                reply_request = ReplyMessageRequest(
-                    replyToken=event.reply_token,
-                    messages=[TextMessage(text=reply_text, quick_reply=quick_reply)]
-                )
-                send_response(event, reply_request)
-            else:
-                # 若沒有輸入店面類型，先詢問使用者想找什麼店面
-                user_state[user_id]["step"] = "awaiting_store_type"
-                reply_text = "(´ᴥ`) 想找什麼店 讓我來嗅嗅看"
-                reply_request = ReplyMessageRequest(
-                    replyToken=event.reply_token,
-                    messages=[TextMessage(text=reply_text)]
-                )
-                send_response(event, reply_request)
-            return
-
-    # 若使用者目前狀態是在等待輸入店面類型
-    if user_state.get(user_id, {}).get("step") == "awaiting_store_type":
-            store_type = user_message.strip()
+        user_state[user_id] = {}
+        parts = user_message.split(" ", 1)
+        if len(parts) > 1:
+            # 指令中已包含店面類型
+            store_type = parts[1].strip()
             user_state[user_id]["store_type"] = store_type
             user_state[user_id]["step"] = "awaiting_location"
-            reply_text = f"請分享地點或目前的位置, 讓我幫你找 {store_type}。"
+            reply_text = f"請分享目前的位置, 讓我幫你找 {store_type}。"
             quick_reply = QuickReply(
-                items=[QuickReplyItem(action=LocationAction(label="點擊分享位置"))]
+                items=[QuickReplyItem(action=LocationAction(label="分享目前位置"))]
             )
             reply_request = ReplyMessageRequest(
                 replyToken=event.reply_token,
                 messages=[TextMessage(text=reply_text, quick_reply=quick_reply)]
             )
             send_response(event, reply_request)
-            return
+        else:
+            # 未附帶店面類型，先詢問想找哪種店面
+            user_state[user_id]["step"] = "awaiting_store_type"
+            reply_text = "(´ᴥ`) 想找什麼店？讓我來嗅嗅看"
+            reply_request = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text=reply_text)]
+            )
+            send_response(event, reply_request)
+        return
+
+    # 如果目前狀態等待輸入店面類型
+    if user_state.get(user_id, {}).get("step") == "awaiting_store_type":
+        store_type = user_message.strip()
+        user_state[user_id]["store_type"] = store_type
+        user_state[user_id]["step"] = "awaiting_location"
+        reply_text = f"請分享地點或目前的位置, 讓我幫你找 {store_type}。"
+        quick_reply = QuickReply(
+            items=[QuickReplyItem(action=LocationAction(label="點擊分享位置"))]
+        )
+        reply_request = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[TextMessage(text=reply_text, quick_reply=quick_reply)]
+        )
+        send_response(event, reply_request)
+        return
 
     # (5) 若在群組中且訊息中不包含「狗蛋」，則不觸發 AI 回應
     if event.source.type == "group" and "狗蛋" not in user_message:
@@ -1477,12 +1476,18 @@ def transcribe_and_respond_with_gpt(audio_path):
 def handle_location_message(event):
     latitude = event.message.latitude
     longitude = event.message.longitude
-    location_info = search_nearby_location(latitude, longitude)
+    user_id = event.source.user_id
+    # 取出使用者先前設定的店面類型
+    store_type = user_state.get(user_id, {}).get("store_type", "")
+    # 呼叫搜尋函數，回傳搜尋結果
+    location_info = search_nearby_location(latitude, longitude, store_type)
     reply_request = ReplyMessageRequest(
         replyToken=event.reply_token,
         messages=[TextMessage(text=location_info)]
     )
     send_response(event, reply_request)
+    # 搜尋完畢後，清除該使用者的狀態
+    user_state.pop(user_id, None)
 
 # Post Handler
 @handler.add(PostbackEvent)
@@ -2724,18 +2729,18 @@ def geocode_location(location_name):
         return location['lat'], location['lng']
     return None, None
 
-def search_nearby_location(latitude, longitude):
+def search_nearby_location(latitude, longitude, store_type):
     params = {
         'location': f"{latitude},{longitude}",
         'radius': 1000,
-        'type': 'cafe',
+        'keyword': store_type,  # 以關鍵字搜尋使用者指定的店面類型
         'key': GOOGLE_SEARCH_KEY
     }
     response = requests.get("https://maps.googleapis.com/maps/api/place/nearbysearch/json", params=params)
     data = response.json()
     if data.get('status') == 'OK' and data.get('results'):
         results = data['results'][:3]
-        reply_text = "以下是最近的 3 個店面：\n"
+        reply_text = f"以下是最近的 3 個 {store_type}：\n"
         for i, place in enumerate(results, 1):
             name = place['name']
             address = place.get('vicinity', '地址未提供')
@@ -2744,8 +2749,7 @@ def search_nearby_location(latitude, longitude):
             maps_url = f"https://www.google.com/maps/search/?api=1&query={place_lat},{place_lng}"
             reply_text += f"{i}. {name} - {address}\n{maps_url}\n\n"
         return reply_text
-    return "抱歉，附近找不到相關店面！"
-
+    return f"抱歉，附近找不到相關 {store_type}！"
 
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 5000))  # 使用 Render 提供的 PORT
