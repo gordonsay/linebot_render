@@ -1371,7 +1371,7 @@ def handle_message(event):
     # gpt_reply = talk_to_ai_history(prompt, ai_model)
     # prompt_reponse = f"conversation as following between {user_id} and ai assistant, my input to ai is {user_message}, and ai response is {gpt_reply}"
     # save_chat_history(user_id, "assistant", prompt_reponse)
-    gpt_reply = ask_groq(user_message, ai_model)
+    gpt_reply = ask_groq(user_message, ai_model, ai_personality)
     
     try:
         reply_request = ReplyMessageRequest(
@@ -2220,7 +2220,7 @@ def search_person_info(name):
         return response_text, f"{BASE_URL}/static/airesponse.jpg"
 
     # AI 生成回應
-    response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b")
+    response_text = ask_groq(ai_prompt, "deepseek-r1-distill-llama-70b", "normal_egg")
     print(f"📢 [DEBUG] AI 回應: {response_text[:50]}...")
 
     return response_text, image_url
