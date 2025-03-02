@@ -2,8 +2,8 @@ import os, re, json, openai, random, time, requests, shutil, datetime, wikipedia
 from pydub import AudioSegment
 from flask import Flask, request, jsonify
 from linebot.exceptions import InvalidSignatureError
-from linebot.v3.messaging import MessagingApi, Configuration, ApiClient, MessagingApiBlob
-from linebot.v3.webhooks import MessageEvent, PostbackEvent, FollowEvent
+from linebot.v3.messaging import MessagingApi, Configuration, ApiClient, MessagingApiBlob, QuickReply, QuickReplyItem, LocationAction
+from linebot.v3.webhooks import MessageEvent, PostbackEvent, FollowEvent, LocationMessageContent
 from linebot.v3.messaging.models import ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer, ImageMessage, PushMessageRequest, StickerMessage, AudioMessage
 from linebot.v3.webhooks.models import AudioMessageContent
 from linebot.v3.webhook import WebhookHandler
@@ -49,6 +49,8 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 VRSS_API_KEY = os.getenv("VRSS_API_KEY")
 NGROK_URL = os.getenv("NGROK_URL")
+NEARBY_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 
 # 初始化 Spotipy
 spotify_auth = SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET)
@@ -75,6 +77,7 @@ video_batches = {}  # 存不同批次的影片
 batch_index = {}  # 追蹤用戶當前批次
 video_list = {}  # 存放不同用戶的完整影片列表
 video_index = {}  # 存放每個用戶目前的影片索引
+user_state = {}
 
 
 # sticker list
@@ -1260,6 +1263,52 @@ def handle_message(event):
         send_response(event, reply_request)
         return
 
+    # (4-x) 狗蛋找店
+    if user_message.startswith("狗蛋找店"):
+            # 建立該使用者的狀態記錄
+            user_state[user_id] = {}
+            parts = user_message.split(" ", 1)
+            if len(parts) > 1:
+                # 如果指令中已包含店面類型
+                store_type = parts[1]
+                user_state[user_id]["store_type"] = store_type
+                user_state[user_id]["step"] = "awaiting_location"
+                reply_text = f"請分享目前的位置, 讓我幫你找 {store_type}。"
+                quick_reply = QuickReply(
+                    items=[QuickReplyItem(action=LocationAction(label="分享目前位置"))]
+                )
+                reply_request = ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[TextMessage(text=reply_text, quick_reply=quick_reply)]
+                )
+                send_response(event, reply_request)
+            else:
+                # 若沒有輸入店面類型，先詢問使用者想找什麼店面
+                user_state[user_id]["step"] = "awaiting_store_type"
+                reply_text = "(´ᴥ`) 想找什麼店 讓我來嗅嗅看"
+                reply_request = ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[TextMessage(text=reply_text)]
+                )
+                send_response(event, reply_request)
+            return
+
+    # 若使用者目前狀態是在等待輸入店面類型
+    if user_state.get(user_id, {}).get("step") == "awaiting_store_type":
+            store_type = user_message.strip()
+            user_state[user_id]["store_type"] = store_type
+            user_state[user_id]["step"] = "awaiting_location"
+            reply_text = f"請分享地點或目前的位置, 讓我幫你找 {store_type}。"
+            quick_reply = QuickReply(
+                items=[QuickReplyItem(action=LocationAction(label="點擊分享位置"))]
+            )
+            reply_request = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text=reply_text, quick_reply=quick_reply)]
+            )
+            send_response(event, reply_request)
+            return
+
     # (5) 若在群組中且訊息中不包含「狗蛋」，則不觸發 AI 回應
     if event.source.type == "group" and "狗蛋" not in user_message:
         return
@@ -1422,6 +1471,18 @@ def transcribe_and_respond_with_gpt(audio_path):
         except Exception as e:
             print(f"❌ [ERROR] 語音轉文字 API 失敗: {e}")
             return None, "❌ 伺服器錯誤，請稍後再試"
+
+# 處理位置訊息
+@handler.add(MessageEvent, message=LocationMessageContent)
+def handle_location_message(event):
+    latitude = event.message.latitude
+    longitude = event.message.longitude
+    location_info = search_nearby_location(latitude, longitude)
+    reply_request = ReplyMessageRequest(
+        replyToken=event.reply_token,
+        messages=[TextMessage(text=location_info)]
+    )
+    send_response(event, reply_request)
 
 # Post Handler
 @handler.add(PostbackEvent)
@@ -2653,6 +2714,37 @@ def get_audio_duration(audio_bytes: bytes) -> int:
     duration_seconds = audio.info.length  # 時長（秒）
     duration_ms = int(duration_seconds * 1000)  # 換算成毫秒
     return duration_ms
+
+def geocode_location(location_name):
+    params = {'address': location_name, 'key': GOOGLE_SEARCH_KEY}
+    response = requests.get("https://maps.googleapis.com/maps/api/geocode/json", params=params)
+    data = response.json()
+    if data.get('status') == 'OK' and data.get('results'):
+        location = data['results'][0]['geometry']['location']
+        return location['lat'], location['lng']
+    return None, None
+
+def search_nearby_location(latitude, longitude):
+    params = {
+        'location': f"{latitude},{longitude}",
+        'radius': 1000,
+        'type': 'cafe',
+        'key': GOOGLE_SEARCH_KEY
+    }
+    response = requests.get("https://maps.googleapis.com/maps/api/place/nearbysearch/json", params=params)
+    data = response.json()
+    if data.get('status') == 'OK' and data.get('results'):
+        results = data['results'][:3]
+        reply_text = "以下是最近的 3 個店面：\n"
+        for i, place in enumerate(results, 1):
+            name = place['name']
+            address = place.get('vicinity', '地址未提供')
+            place_lat = place['geometry']['location']['lat']
+            place_lng = place['geometry']['location']['lng']
+            maps_url = f"https://www.google.com/maps/search/?api=1&query={place_lat},{place_lng}"
+            reply_text += f"{i}. {name} - {address}\n{maps_url}\n\n"
+        return reply_text
+    return "抱歉，附近找不到相關店面！"
 
 
 if __name__ == "__main__":
