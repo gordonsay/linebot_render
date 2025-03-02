@@ -62,6 +62,10 @@ allowed_users_str = os.getenv("ALLOWED_USERS", "")
 ALLOWED_USERS = {uid.strip() for uid in allowed_users_str.split(",") if uid.strip()}
 allowed_groups_str = os.getenv("ALLOWED_GROUPS", "")
 ALLOWED_GROUPS = {gid.strip() for gid in allowed_groups_str.split(",") if gid.strip()}
+allowed_users_BADEGG_str = os.getenv("ALLOWED_BADEGG_USERS", "")
+ALLOWED_BADEGG_USERS = {uid.strip() for uid in allowed_users_str.split(",") if uid.strip()}
+allowed_groups_BADEGG_str = os.getenv("ALLOWED_BADEGG_GROUPS", "")
+ALLOWED_BADEGG_GROUPS = {gid.strip() for gid in allowed_groups_str.split(",") if gid.strip()}
 
 # Initailize LINE API (v3)
 config = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
@@ -905,12 +909,12 @@ def handle_message(event):
         # 若此事件來自語音，則改用 push_message
         if getattr(event, "_is_audio", False):
             target = event.source.group_id if event.source.type == "group" else event.source.user_id
-            if user_id in allowed_users_str :
+            if user_id in allowed_users_BADEGG_str :
                 send_ai_properties_private_menu(event.reply_token, target, use_push=True)
             else:
                 send_ai_properties_menu(event.reply_token, target, use_push=True)
         else:
-            if user_id in allowed_users_str :
+            if user_id in allowed_users_BADEGG_str :
                 send_ai_properties_private_menu(event.reply_token)
             else:
                 send_ai_properties_menu(event.reply_token)
