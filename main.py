@@ -439,6 +439,73 @@ ACTRESS_AV_NAMES = ["三上悠亞", "橋本有菜", "篠田優", "桃乃木香�
 ACTRESS_AV_SERIES = ["NTR", "人妻", "痴女", "制服", "未亡", "交換", "按摩", "精油", "鄰居", "電車", "遊戲", "面試", \
                     "眼鏡", "家庭教師", "女上司", "女同學", "秘書", "女僕", "美少女"]
 
+ACTRESS_AV_DESCRIPTIONS = {
+    "三上悠亞": "甜美誘惑的國民偶像",
+    "橋本有菜": "清純靈動的校園女神",
+    "篠田優": "成熟嫵媚的人妻代表",
+    "桃乃木香奈": "俏皮可愛的水果甜心",
+    "波多野結衣": "多才多藝的E級萬能女王",
+    "Julia": "驚艷J級的夢幻尤物",
+    "天海翼": "優雅氣質的飛行天使",
+    "葵司": "知性冷艷的高級秘書",
+    "深田詠美": "夢幻誘惑的眼鏡家庭教師",
+    "明日花綺羅": "華麗耀眼的G級花魁公主",
+    "小倉由菜": "青春活潑的鄰家少女",
+    "白石茉莉奈": "溫柔成熟的熟女姐姐",
+    "夢乃愛華": "夢幻浪漫的愛情精靈",
+    "山岸逢花": "氣質出眾的新聞主播",
+    "河北彩": "清新自然的彩虹女孩",
+    "小島南": "嬌小玲瓏的南方甜心",
+    "相澤南": "陽光燦爛的南國美人",
+    "涼森玲夢": "清涼舒爽的夏日夢境",
+    "架乃由羅": "優雅迷人的藝術畫像",
+    "伊藤舞雪": "純白柔美的冬日精靈",
+    "藤森里穂": "溫暖貼心的森林姐姐",
+    "星宮一花": "星光閃耀的花樣美人",
+    "櫻空桃": "甜美誘人的桃色櫻花",
+    "明里紬": "細膩柔美的紡織少女",
+    "高橋聖子": "高雅聖潔的文藝女子",
+    "七澤美亞": "小巧可愛的七彩寶石",
+    "楓可憐": "纖細可憐的秋日紅葉",
+    "岬奈奈美": "海風輕盈的甜美浪花",
+    "八乃翼": "性感飛揚的靈動小鳥",
+    "美谷朱里": "熱情奔放的紅寶舞者",
+    "水卜櫻": "清新飽滿的H級櫻桃女孩",
+    "戶田真琴": "文靜清秀的文學少女",
+    "星奈愛": "溫柔星光的愛情使者",
+    "君島美緒": "高貴冷艷的島嶼女王",
+    "佐佐木明希": "明亮活潑的陽光女孩",
+    "松本一香": "清新自然的松林仙子",
+    "石川澪": "靈動輕盈的溪流精靈",
+    "東條夏": "熱情火辣的夏日辣妹",
+    "小花暖": "溫暖柔軟的小花仙子",
+    "倉多真央": "豐滿真摯的倉庫甜心",
+    "蓮實克蕾兒": "霸氣性感的蓮花戰士",
+    "樞木葵": "俏皮靈動的向日葵",
+    "渚光希": "閃耀海灘的希望之光"
+}
+
+ACTRESS_AV_SERIES_DESCRIPTIONS = {
+    "NTR": "偷心背叛的刺激劇情",
+    "人妻": "成熟女性的溫柔誘惑",
+    "痴女": "主動出擊的性感獵人",
+    "制服": "青春校園的純情幻想",
+    "未亡": "孤單寡婦的秘密心事",
+    "交換": "禁忌遊戲的刺激體驗",
+    "按摩": "放鬆身心的隱秘觸感",
+    "精油": "滑膩香氛的誘人療癒",
+    "鄰居": "隔壁傳來的曖昧氣息",
+    "電車": "擁擠車廂的緊張邂逅",
+    "遊戲": "虛擬與現實的挑逗對決",
+    "面試": "壓力下的意外展開",
+    "眼鏡": "知性外表下的反差魅力",
+    "家庭教師": "課桌下的私密教學",
+    "女上司": "職場權威的性感支配",
+    "女同學": "青澀回憶的甜蜜悸動",
+    "秘書": "辦公桌旁的貼身誘惑",
+    "女僕": "服侍主人的溫順幻想",
+    "美少女": "純真與魅力的完美結合"
+}
 
 LANGUAGE_MAP = {
     "ar": "ar-eg",
@@ -1229,6 +1296,54 @@ def handle_message(event):
             send_response(event, reply_request)
         else:
             flex_message = create_flex_jable_message(user_id, videos)
+            reply_request = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[flex_message]
+            )
+            send_response(event, reply_request)
+            return
+    
+    if "狗蛋開車"in user_message and "時刻表" in user_message:
+        videos_des = get_AVVIDEO_description()
+        reply_request = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[TextMessage(text=videos_des)]
+        )
+        send_response(event, reply_request)
+        return
+    
+    if "狗蛋開車" in user_message:
+        parts = user_message.split(" ", 1)
+        print(parts)
+
+        keywords = parts[1].strip() if len(parts) > 1 else ""
+        if not keywords:  # 若無關鍵字，跳過處理
+            reply_request = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text="請輸入關鍵字，例如 '狗蛋開車 三上悠亞'")]
+            )
+            send_response(event, reply_request)
+            return
+
+        # 查找完整名稱（忽略大小寫，支援部分匹配）
+        full_actress = find_full_name(keywords, ACTRESS_AV_NAMES)
+        full_series = find_full_name(keywords, ACTRESS_AV_SERIES)
+
+        if full_actress:
+            videos_list = get_videos_from_database(full_actress, max_title_length)
+        elif full_series:
+            videos_list = get_videos_from_database_series(full_series, max_title_length)
+        else:
+            videos_list = []
+
+        if not videos_list:
+            reply_request = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text="沒有搜尋到內容，請輸入\n 狗蛋開車 時刻表\n確認可查詢關鍵字")]
+            )
+            send_response(event, reply_request)
+        else:
+            flex_message = create_flex_jable_message(user_id, videos_list)
             reply_request = ReplyMessageRequest(
                 replyToken=event.reply_token,
                 messages=[flex_message]
@@ -3375,6 +3490,36 @@ def get_latest_scraped_at():
     # ✅ **正確使用 `datetime.strptime()`**
     scraped_at = response.data[0]["scraped_at"]
     return datetime.strptime(scraped_at, "%Y-%m-%dT%H:%M:%S.%f").strftime("%Y-%m-%d")
+
+def get_AVVIDEO_description(name=None):
+    """
+    輸入女優名稱或系列名稱，返回對應的介紹。
+    如果無輸入（name=None 或空字串），返回所有女優和系列介紹。
+    如果名稱不存在，返回提示訊息。
+    """
+    if not name:  # 當 name 為 None 或空字串時
+        all_descriptions = []
+        all_descriptions.append("=== 女優介紹 ===")
+        for actress, desc in ACTRESS_AV_DESCRIPTIONS.items():
+            all_descriptions.append(f"{actress}: {desc}")
+        all_descriptions.append("\n=== 系列介紹 ===")
+        for series, desc in ACTRESS_AV_SERIES_DESCRIPTIONS.items():
+            all_descriptions.append(f"{series}: {desc}")
+        return "\n".join(all_descriptions)
+    
+    if name in ACTRESS_AV_DESCRIPTIONS:
+        return ACTRESS_AV_DESCRIPTIONS[name]
+    elif name in ACTRESS_AV_SERIES_DESCRIPTIONS:
+        return ACTRESS_AV_SERIES_DESCRIPTIONS[name]
+    else:
+        return f"找不到 '{name}' 的介紹，請確認名稱是否正確！"
+
+def find_full_name(keyword, name_list):
+    keyword_lower = keyword.lower()
+    for full_name in name_list:
+        if keyword_lower in full_name.lower():
+            return full_name
+    return None
 
 
 
