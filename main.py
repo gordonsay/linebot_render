@@ -2752,7 +2752,7 @@ def get_weather_forecast(city):
 
         # 繪製圖表：x 軸每 6 小時一個刻度
         fig, ax1 = plt.subplots(figsize=(10, 6))
-        ax1.plot(chart_times, chart_temps, marker="o", color="blue", label="Temp (°C)")
+        ax1.plot(chart_times, chart_temps, marker="o", color="red", label="Temp (°C)")
         ax1.set_xlabel("Date")
         ax1.set_ylabel("Temp (°C)", color="red")
         ax1.tick_params(axis="y", labelcolor="red")
@@ -2763,7 +2763,7 @@ def get_weather_forecast(city):
 
         # 新增第二條線：降雨機率，並用右側 y 軸顯示
         ax2 = ax1.twinx()
-        ax2.plot(chart_times, chart_pops, marker="o", color="red", label="Rain (%)")
+        ax2.plot(chart_times, chart_pops, marker="o", color="blue", label="Rain (%)")
         ax2.set_ylabel("Rain (%)", color="blue")
         ax2.tick_params(axis="y", labelcolor="blue")
 
