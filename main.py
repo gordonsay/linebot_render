@@ -88,6 +88,7 @@ video_list = {}  # 存放不同用戶的完整影片列表
 video_index = {}  # 存放每個用戶目前的影片索引
 user_state = {}
 user_mode = {}
+user_videos_choice = {}
 
 # sticker list
 OFFICIAL_STICKERS = [
@@ -1504,6 +1505,15 @@ def handle_message(event):
         send_response(event, reply_request)
         return
 
+    # (4-z) 狗蛋劇場
+    if user_message == "狗蛋劇場":
+        if getattr(event, "_is_audio", False):
+            target = event.source.group_id if event.source.type == "group" else event.source.user_id
+            send_video_selection_menu(event.reply_token, target, use_push=True)
+        else:
+            send_video_selection_menu(event.reply_token)
+        return
+
     # 如果目前狀態等待輸入店面類型
     if user_state.get(user_id, {}).get("step") == "awaiting_store_type":
         store_type = user_message.strip()
@@ -1871,12 +1881,141 @@ def handle_postback(event):
         messaging_api.reply_message(reply_req)
         return
 
+
+    # ✅ **處理影片類型選擇**
+    video_map = {
+        "videos_movies": "movies",
+        "videos_dramas": "dramas",
+        "videos_cartones": "cartones",
+        "videos_expert": "expert",
+    }
+
+    if data in video_map:
+        selected_category = video_map[data]
+
+        # 儲存用戶選擇
+        if group_id:
+            user_videos_choice[group_id] = selected_category
+        else:
+            user_videos_choice[user_id] = selected_category
+
+        # 產生對應類型的 FlexMessage
+        flex_message = generate_videos_flex_message(user_id, selected_category)
+
+        # 送出訊息
+        reply_req = ReplyMessageRequest(
+            reply_token=event.reply_token,
+            messages=[flex_message]
+        )
+        messaging_api.reply_message(reply_req)
+
     # ✅ **處理未知的 postback**
     reply_req = ReplyMessageRequest(
         replyToken=event.reply_token,
         messages=[TextMessage(text="未知選擇，請重試。")]
     )
     messaging_api.reply_message(reply_req)
+
+def send_video_selection_menu(reply_token, target=None, use_push=False):
+    """發送 AI 選擇選單"""
+    flex_contents_json = {
+        "type": "carousel",
+        "contents": [
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/movieegg.png",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Movies", "data": "videos_movies"}}
+                    ]
+                }
+            },
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/dramaegg.png",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Dramas", "data": "videos_dramas"}}
+                    ]
+                }
+            },
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/cartoneegg.png",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Animes", "data": "videos_cartones"}}
+                    ]
+                }
+            },
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/expertegg.png",  
+                    "size": "md",
+                    "aspectRatio": "1:1",
+                    "aspectMode": "fit"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",
+                    "contents": [
+                        {"type": "button", "style": "primary", "action": {"type": "postback", "label": "Recommend", "data": "videos_expert"}}
+                    ]
+                }
+            }
+        ]
+    }
+
+    try:
+        # 將 flex JSON 轉為字串，再解析成 FlexContainer
+        flex_json_str = json.dumps(flex_contents_json)
+        flex_contents = FlexContainer.from_json(flex_json_str)
+        flex_message = FlexMessage(
+            alt_text="請選擇影片類型",
+            contents=flex_contents
+        )
+        reply_request = ReplyMessageRequest(
+            replyToken=reply_token,
+            messages=[
+                TextMessage(text="你好，我是狗蛋🐶 ！。"),
+                flex_message
+            ]
+        )
+        if use_push and target:
+            push_request = PushMessageRequest(
+                to=target,
+                messages=reply_request.messages
+            )
+            messaging_api.push_message(push_request)
+        else:
+            messaging_api.reply_message(reply_request)
+    except Exception as e:
+        print(f"❌ FlexMessage Error: {e}")
+
 
 def send_ai_selection_menu(reply_token, target=None, use_push=False):
     """發送 AI 選擇選單"""
@@ -3155,6 +3294,51 @@ def create_flex_jable_message(user_id, videos):
     batch_index[user_id] = 0  # **初始化顯示第一組**
 
     return generate_flex_message(user_id)
+
+def generate_videos_flex_message(user_id, video_selection="latest"):
+    video_titles = {
+        "movies": "Movies",
+        "dramas": "Dramas",
+        "cartones": "Cartoons",
+        "expert": "Expert Picks",
+    }
+
+    selected_category = video_titles.get(video_selection, "Latest Videos")
+
+    flex_contents_json = {
+        "type": "carousel",
+        "contents": [
+            {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": f"{BASE_URL}/static/workegg.png",
+                    "size": "md"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "justifyContent": "center",  # 讓內容垂直置中
+                    "alignItems": "center",  # 讓內容水平置中
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": f"{selected_category}\n功能施工中，忙不過來啦",
+                            "wrap": True,
+                            "size": "md",
+                            "weight": "bold",
+                            "align": "center"  # 文字置中
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    # 轉換成 FlexContainer
+    flex_container = FlexContainer.from_dict(flex_contents_json)
+
+    return FlexMessage(alt_text="搜尋結果", contents=flex_container)
 
 def generate_flex_message(user_id, mode="latest"):
     """ 根據當前批次，生成對應的 FlexMessage """
