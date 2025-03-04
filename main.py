@@ -2001,7 +2001,7 @@ def send_video_selection_menu(reply_token, target=None, use_push=False):
         reply_request = ReplyMessageRequest(
             replyToken=reply_token,
             messages=[
-                TextMessage(text="你好，我是狗蛋🐶 ！。"),
+                TextMessage(text="你好，我是狗蛋🐶 ！ \n今天想看點什麼！"),
                 flex_message
             ]
         )
