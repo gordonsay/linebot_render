@@ -3850,7 +3850,7 @@ def generate_user_videos_flex_message(user_id, mode="latest"):
                 "type": "image",
                 "url": video["thumbnail"],
                 "size": "xl",
-                "aspectRatio": "4:3",
+                "aspectRatio": "4:6",
                 "aspectMode": "cover",
                 "action": {
                     "type": "uri",
