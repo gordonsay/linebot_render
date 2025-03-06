@@ -548,6 +548,15 @@ LANGUAGE_MAP = {
     "vi": "vi-vn"
 }
 
+
+GENERAL_MOVIE_SERIES = ["動作片", "喜劇片", "愛情片", "科幻片", "恐怖片", "劇情片", "戰爭片", "動畫片"]
+
+NETFLIX_DRAMA_SERIES = ["劇情影集", "動作影集", "喜劇影集", "愛情影集", "科幻影集", "恐怖影集", "戰爭影集", "動畫影集"]
+
+GENERAL_DRAMA_SERIES = ["陸劇", "港劇", "台劇", "日劇", "韓劇", "美劇", "海外劇"]
+
+GENERAL_ANIME_SERIES = ["港台動漫", "日韓動漫", "大陸動漫", "歐美動漫", "海外動漫"]
+
 # Record AI model choosen by User
 user_ai_choice = {}
 # Record AI model choosen by User
@@ -1511,12 +1520,29 @@ def handle_message(event):
 
     # (4-z) 狗蛋劇場
     if user_message == "狗蛋劇場":
-        if getattr(event, "_is_audio", False):
-            target = event.source.group_id if event.source.type == "group" else event.source.user_id
-            send_video_selection_menu(event.reply_token, target, use_push=True)
+        # if getattr(event, "_is_audio", False):
+        #     target = event.source.group_id if event.source.type == "group" else event.source.user_id
+        #     send_video_selection_menu(event.reply_token, target, use_push=True)
+        # else:
+        #     send_video_selection_menu(event.reply_token)
+        # return
+        videos = get_remote_videos_from_database("test", max_title_length)
+        print(videos)
+
+        if not videos:
+            reply_request = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text="目前沒有新影片，請稍後再試！")]
+            )
+            send_response(event, reply_request)
         else:
-            send_video_selection_menu(event.reply_token)
-        return
+            flex_message = create_flex_user_message(user_id, videos)
+            reply_request = ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[flex_message]
+            )
+            send_response(event, reply_request)
+            return
 
     # 如果目前狀態等待輸入店面類型
     if user_state.get(user_id, {}).get("step") == "awaiting_store_type":
@@ -1885,17 +1911,88 @@ def handle_postback(event):
         messaging_api.reply_message(reply_req)
         return
 
+    if data.startswith("change_latest_momo_videos|"):
+        user_id = data.split("|")[1]
+        videos = get_remote_videos_from_momovod_database("dummy", max_title_length)
+        print(videos)
+        if videos:
+            video_batches[user_id] = [videos[i:i+3] for i in range(0, len(videos), 3)]
+            batch_index[user_id] = 0
+
+        # ✅ **設定 mode="latest"，直到使用者切換回熱門**
+        user_mode[user_id] = "change_latest_momo_videos"
+
+        reply_req = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[generate_user_videos_flex_message(user_id, mode="change_latest_momo_videos")]
+        )
+        messaging_api.reply_message(reply_req)
+        return
+    
+    elif data.startswith("change_latest_netflix_movies|"):
+        user_id = data.split("|")[1]
+        videos = get_remote_videos_from_database_drama_series("dummy", max_title_length)
+        if videos:
+            video_batches[user_id] = [videos[i:i+3] for i in range(0, len(videos), 3)]
+            batch_index[user_id] = 0
+
+        # ✅ **設定 mode="latest"，直到使用者切換回熱門**
+        user_mode[user_id] = "change_latest_momo_videos"
+
+        reply_req = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[generate_user_videos_flex_message(user_id, mode="change_latest_momo_videos")]
+        )
+        messaging_api.reply_message(reply_req)
+        return
+    
+    elif data.startswith("change_movie_series|"):
+        user_id = data.split("|")[1]
+        series_name = data.split("|")[2]
+
+        # **拉取最新影片**
+        videos = get_remote_videos_from_database_movie_series(series_name, max_title_length)
+        if videos:
+            video_batches[user_id] = [videos[i:i+3] for i in range(0, len(videos), 3)]
+            batch_index[user_id] = 0
+        # ✅ **設定 mode="latest"，直到使用者切換回熱門**
+        user_mode[user_id] = "change_movie_series"
+
+        reply_req = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[create_flex_user_message(user_id, videos)]
+        )
+        messaging_api.reply_message(reply_req)
+        return
+    
+    elif data.startswith("change_batch_videos|"):
+        user_id = data.split("|")[1]
+
+        if user_id in video_batches and user_id in batch_index:
+            total_batches = len(video_batches[user_id])
+            batch_index[user_id] = (batch_index[user_id] + 1) % total_batches  # 循環播放影片
+
+        # ✅ **維持使用者的 mode 狀態**
+        current_mode = user_mode.get(user_id, "latest")
+
+        reply_req = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[generate_user_videos_flex_message(user_id, mode=current_mode)]  # ✅ 不重置 mode
+        )
+        messaging_api.reply_message(reply_req)
+        return
+
 
     # ✅ **處理影片類型選擇**
-    video_map = {
+    video_categories_map = {
         "videos_movies": "movies",
         "videos_dramas": "dramas",
         "videos_cartones": "cartones",
         "videos_expert": "expert",
     }
 
-    if data in video_map:
-        selected_category = video_map[data]
+    if data in video_categories_map:
+        selected_category = video_categories_map[data]
 
         # 儲存用戶選擇
         if group_id:
@@ -3665,6 +3762,16 @@ def get_random_actress():
 def get_random_series():
     return random.choice(ACTRESS_AV_SERIES)
 
+def get_random_movie_series():
+    return random.choice(GENERAL_MOVIE_SERIES)
+
+def get_random_netflix_drama_series():
+    return random.choice(NETFLIX_DRAMA_SERIES)
+
+def get_random_general_drama_series():
+    return random.choice(GENERAL_DRAMA_SERIES)
+
+
 from datetime import datetime  # ✅ 正確匯入
 
 def get_latest_scraped_at():
@@ -3707,6 +3814,226 @@ def find_full_name(keyword, name_list):
         if keyword_lower in full_name.lower():
             return full_name
     return None
+
+def create_flex_user_message(user_id, videos):
+    global video_batches, batch_index
+
+    if not videos:
+        return TextMessage(text="找不到相關影片，請嘗試其他關鍵字。")
+
+    # ✅ **將 影片拆成組，每組 3 部**
+    video_batches[user_id] = [videos[i:i+3] for i in range(0, len(videos), 3)]
+    batch_index[user_id] = 0  # **初始化顯示第一組**
+
+    return generate_user_videos_flex_message(user_id)
+
+def generate_user_videos_flex_message(user_id, mode="latest"):
+    """ 根據當前批次，生成對應的 FlexMessage """
+    global video_batches, batch_index
+
+    if user_id not in video_batches:
+        return TextMessage(text="請先搜尋影片！")
+
+    batch = video_batches[user_id][batch_index[user_id]]
+
+    # ✅ **隨機選擇一個電影系列**
+    random_movie_series = get_random_movie_series()
+
+    # ✅ **獲取最新的 scraped_at（YYYY-MM-DD）**
+    latest_scraped_at = get_latest_scraped_at()
+
+    contents = []
+    for video in batch:
+        bubble = {
+            "type": "bubble",
+            "hero": {
+                "type": "image",
+                "url": video["thumbnail"],
+                "size": "full",
+                "aspectRatio": "16:9",
+                "aspectMode": "cover",
+                "action": {
+                    "type": "uri",
+                    "uri": video["link"]
+                }
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": video["title"],
+                        "weight": "bold",
+                        "size": "md",
+                        "wrap": True
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "action": {
+                            "type": "uri",
+                            "label": "觀看影片",
+                            "uri": video["link"]
+                        }
+                    }
+                ]
+            }
+        }
+        contents.append(bubble)
+
+    # ✅ **按使用者當前的 mode 變更按鈕**
+    change_label = "換熱門" if mode == "latest" else "換最新"
+    change_data = f"change_popular|{user_id}" if mode == "latest" else f"change_latest|{user_id}"
+
+    button_bubble = {
+        "type": "bubble",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "height": "300px",
+            "justifyContent": "space-between",
+            "contents": [
+                {
+                    "type": "button",
+                    "style": "secondary",
+                    "flex": 1,
+                    "action": {
+                        "type": "postback",
+                        "label": "換一批",
+                        "data": f"change_batch_videos|{user_id}"
+                    }
+                },
+                {
+                    "type": "button",
+                    "style": "secondary",
+                    "flex": 1,
+                    "action": {
+                        "type": "postback",
+                        "label": random_movie_series,
+                        "data": f"change_movie_series|{user_id}|{random_movie_series}"
+                    }
+                },
+                {
+                    "type": "button",  
+                    "style": "secondary",
+                    "flex": 1,
+                    "action": {
+                        "type": "postback",
+                        "label": "Momovod Trending Movie", 
+                        "data": f"change_latest_momo_videos|{user_id}"  
+                    }
+                },
+                {
+                    "type": "button",  
+                    "style": "secondary",
+                    "flex": 1,
+                    "action": {
+                        "type": "postback",
+                        "label": "Netflix Trending drama",  
+                        "data": f"change_latest_netflix_movies|{user_id}"  
+                    }
+                },
+                {
+                    "type": "box",  # ✅ **圖片 + Last Update**
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "image",
+                            "url": f"{BASE_URL}/static/badegg.png",
+                            "size": "md",
+                            "aspectRatio": "16:9",
+                            "aspectMode": "cover",
+                            "alignSelf": "flex-start",
+                            "margin": "md"
+                        },
+                        {
+                            "type": "text",
+                            "text": f"Last Update: {latest_scraped_at}",
+                            "size": "xs",
+                            "color": "#888888",
+                            "align": "center",
+                            "margin": "md",
+                            "wrap": True
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+
+    contents.append(button_bubble)
+
+    flex_message_content = {
+        "type": "carousel",
+        "contents": contents
+    }
+
+    flex_json_str = json.dumps(flex_message_content)
+    flex_contents = FlexContainer.from_json(flex_json_str)
+    return FlexMessage(alt_text="搜尋結果", contents=flex_contents)
+
+def get_remote_videos_from_database(search_name, max_title_length):
+    """ 從資料庫獲取影片，並限制標題長度 """
+    response = supabase.table(f"videos_movies_contents").select("title, link, thumbnail").limit(10).order("scraped_at", desc=True).execute()
+    
+    if not response.data:
+        return []
+
+    # ✅ **限制 title 長度**
+    for video in response.data:
+        if len(video["title"]) > max_title_length:
+            video["title"] = video["title"][:max_title_length] + "..."  # **截取並加上 `...`**
+
+    return response.data
+
+def get_remote_videos_from_momovod_database(search_name, max_title_length):
+    """ 從資料庫獲取影片，並限制標題長度 """
+    response = supabase.table(f"videos_movies_contents").select("title, link, thumbnail").eq("source_id", 1).limit(10).order("scraped_at", desc=True).execute()
+    
+    if not response.data:
+        return []
+
+    # ✅ **限制 title 長度**
+    for video in response.data:
+        if len(video["title"]) > max_title_length:
+            video["title"] = video["title"][:max_title_length] + "..."  # **截取並加上 `...`**
+
+    return response.data
+
+def get_remote_videos_from_database_movie_series(search_name, max_title_length):
+    """ 從資料庫獲取影片，並限制標題長度 """
+    response = supabase.table(f"videos_movies_contents").select("title, link, thumbnail").eq("note",search_name).limit(10).order("scraped_at", desc=True).execute()
+    if not response.data:
+        return [response]
+
+    # ✅ **限制 title 長度**
+    for video in response.data:
+        if len(video["title"]) > max_title_length:
+            video["title"] = video["title"][:max_title_length] + "..."  # **截取並加上 `...`**
+
+    return response.data
+
+def get_remote_videos_from_database_drama_series(search_name, max_title_length):
+    """ 從資料庫獲取影片，並限制標題長度 """
+    print(1111111111111111111111111111)
+    response = supabase.table(f"videos_movies_contents").select("title, link, thumbnail").eq("source_id", 2).limit(10).order("scraped_at", desc=True).execute()
+    if not response.data:
+        return [response]
+
+    # ✅ **限制 title 長度**
+    for video in response.data:
+        if len(video["title"]) > max_title_length:
+            video["title"] = video["title"][:max_title_length] + "..."  # **截取並加上 `...`**
+
+    return response.data
 
 
 
