@@ -3849,8 +3849,8 @@ def generate_user_videos_flex_message(user_id, mode="latest"):
             "hero": {
                 "type": "image",
                 "url": video["thumbnail"],
-                "size": "full",
-                "aspectRatio": "16:9",
+                "size": "xl",
+                "aspectRatio": "4:3",
                 "aspectMode": "cover",
                 "action": {
                     "type": "uri",
@@ -3866,7 +3866,8 @@ def generate_user_videos_flex_message(user_id, mode="latest"):
                         "text": video["title"],
                         "weight": "bold",
                         "size": "md",
-                        "wrap": True
+                        "wrap": True,
+                        "align": "center"
                     }
                 ]
             },
@@ -3878,6 +3879,10 @@ def generate_user_videos_flex_message(user_id, mode="latest"):
                     {
                         "type": "button",
                         "style": "primary",
+                        "width": "auto",
+                        "height" :"sm",
+                        "cornerRadius": "md",  # 讓按鈕變小圓角
+                        "paddingAll": "5px", 
                         "action": {
                             "type": "uri",
                             "label": "觀看影片",
