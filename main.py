@@ -553,6 +553,10 @@ user_ai_choice = {}
 # Record AI model choosen by User
 user_personality_choice = {}
 
+@app.route("/ping", methods=["GET", "POST"])
+def ping():
+    return "OK", 200  # 不論是 GET 或 POST 都回應 OK
+
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify(status="ok"), 200  # ✅ 回傳 HTTP 200 表示正常
@@ -1762,7 +1766,7 @@ def handle_postback(event):
         reply_req = ReplyMessageRequest(
             replyToken=event.reply_token,
             messages=[
-                TextMessage(text=f"已選擇個性: {personality_map[data]}！\n\n🔄 輸入「換個性」可重新選擇")
+                TextMessage(text=f"已選擇個性: {personality_map[data]}！\n\n🔄 輸入「換人格」可重新選擇")
             ]
         )
         messaging_api.reply_message(reply_req)
@@ -2015,7 +2019,6 @@ def send_video_selection_menu(reply_token, target=None, use_push=False):
             messaging_api.reply_message(reply_request)
     except Exception as e:
         print(f"❌ FlexMessage Error: {e}")
-
 
 def send_ai_selection_menu(reply_token, target=None, use_push=False):
     """發送 AI 選擇選單"""
