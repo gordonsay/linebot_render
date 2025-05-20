@@ -2160,7 +2160,7 @@ def send_ai_selection_menu(reply_token, target=None, use_push=False):
                 "type": "bubble",
                 "hero": {
                     "type": "image",
-                    "url": f"{BASE_URL}/static/meta.jpg",
+                    "url": f"{BASE_URL}/static/meta.png",
                     "size": "md"
                 },
                 "body": {
@@ -2173,25 +2173,25 @@ def send_ai_selection_menu(reply_token, target=None, use_push=False):
                     ]
                 }
             },
-            {
-                "type": "bubble",
-                "hero": {
-                    "type": "image",
-                    "url": f"{BASE_URL}/static/giticon.png",  
-                    "size": "md",
-                    "aspectRatio": "1:1",
-                    "aspectMode": "fit"
-                },
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "justifyContent": "center",
-                    "contents": [
-                        {"type": "text", "text": "高登基地", "weight": "bold", "size": "xl", "align": "center"},
-                        {"type": "button", "style": "primary", "action": {"type": "uri", "label": "開啟基地", "uri": "https://gordonsay.github.io/gordonwu/personalpage/index_personal.html"}}
-                    ]
-                }
-            }
+            # {
+            #     "type": "bubble",
+            #     "hero": {
+            #         "type": "image",
+            #         "url": f"{BASE_URL}/static/giticon.png",  
+            #         "size": "md",
+            #         "aspectRatio": "1:1",
+            #         "aspectMode": "fit"
+            #     },
+            #     "body": {
+            #         "type": "box",
+            #         "layout": "vertical",
+            #         "justifyContent": "center",
+            #         "contents": [
+            #             {"type": "text", "text": "高登基地", "weight": "bold", "size": "xl", "align": "center"},
+            #             {"type": "button", "style": "primary", "action": {"type": "uri", "label": "開啟基地", "uri": "https://gordonsay.github.io/gordonwu/personalpage/index_personal.html"}}
+            #         ]
+            #     }
+            # }
         ]
     }
 
