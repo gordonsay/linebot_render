@@ -2687,7 +2687,7 @@ def generate_image_with_openai(prompt):
     try:
         from openai import OpenAI
         client_openai_image = OpenAI()
-        response = client_openai_image(
+        response = client_openai_image.image.generate(
             model="gpt-image-1",
             prompt=f"請根據描述生成圖片。如果描述涉及人物，以可愛卡通風格呈現；如果描述涉及物品，請生成清晰且精美的物品圖像。 描述:{prompt}",
             n = 1,
