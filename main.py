@@ -2694,7 +2694,7 @@ def generate_image_with_openai(prompt):
         #    size = "512x512"
         #)
         response = openai.Image.create(
-            model="gpt-image-1",
+            model="gpt-image-1-mini",
             prompt=f"{prompt}",
             n=1,
             size="1024x1024"
