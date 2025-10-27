@@ -2685,19 +2685,20 @@ def generate_image_with_openai(prompt):
       prompt: 圖像生成提示文字
     """
     try:
-        from openai import OpenAI
-        client_openai_image = OpenAI()
-        response = client_openai_image.image.generate(
-            model="gpt-image-1",
-            prompt=f"請根據描述生成圖片。如果描述涉及人物，以可愛卡通風格呈現；如果描述涉及物品，請生成清晰且精美的物品圖像。 描述:{prompt}",
-            n = 1,
-            size = "512x512"
-        )
-        #response = openai.Image.create(
+        #from openai import OpenAI
+        #client_openai_image = OpenAI()
+        #response = client_openai_image.image.generate(
+        #    model="gpt-image-1",
         #   prompt=f"請根據描述生成圖片。如果描述涉及人物，以可愛卡通風格呈現；如果描述涉及物品，請生成清晰且精美的物品圖像。 描述:{prompt}",
-        #    n=1,
-        #   size="512x512"
+        #    n = 1,
+        #    size = "512x512"
         #)
+        response = openai.Image.create(
+            model="gpt-image-1",
+            prompt=f"{prompt}",
+            n=1,
+            size="512x512"
+        )
         data = response.get("data", [])
         if not data or len(data) == 0:
             print("❌ 生成圖片時沒有回傳任何資料")
