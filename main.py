@@ -811,7 +811,7 @@ def handle_message(event):
     if group_id and group_id in user_ai_choice:
         ai_model = user_ai_choice[group_id]
     else:
-        ai_model = user_ai_choice.get(user_id, "deepseek-r1-distill-llama-70b")
+        ai_model = user_ai_choice.get(user_id, "GPT_4o_Mini")
 
     # 檢查目前選用的 AI 人格
     if group_id and group_id in user_personality_choice:
@@ -1759,8 +1759,8 @@ def handle_postback(event):
     model_map = {
         "model_gpt4o": "GPT-4o",
         "model_gpt4o_mini": "GPT_4o_Mini",
-        "model_deepseek": "deepseek-r1-distill-llama-70b",
-        "model_llama3": "llama3-8b-8192",
+        "model_deepseek": "GPT_4o_Minib",
+        "model_llama3": "GPT_4o_Mini",
     }
 
     if data in model_map:
