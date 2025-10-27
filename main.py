@@ -2697,7 +2697,7 @@ def generate_image_with_openai(prompt):
             model="gpt-image-1",
             prompt=f"{prompt}",
             n=1,
-            size="512x512"
+            size="1024x1024"
         )
         data = response.get("data", [])
         if not data or len(data) == 0:
