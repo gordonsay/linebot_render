@@ -13,7 +13,7 @@ from flask import send_from_directory
 from bs4 import BeautifulSoup
 from spotipy.oauth2 import SpotifyClientCredentials
 from playwright.sync_api import sync_playwright
-from playwright_stealth import stealth_sync
+#from playwright_stealth import stealth_sync
 import google.generativeai as genai  # ✅ 正确的导入方式
 import PIL.Image
 from io import BytesIO
@@ -3179,7 +3179,7 @@ def get_video_data(search_query):
         page = context.new_page()
 
         # ✅ 避免被封鎖，使用 Stealth
-        stealth_sync(page)
+        #stealth_sync(page)
 
         # ✅ 隨機 User-Agent
         user_agents = [
@@ -3230,7 +3230,7 @@ def get_video_data_hotest():
         page = context.new_page()
 
         # ✅ 避免被封鎖，使用 Stealth
-        stealth_sync(page)
+        #stealth_sync(page)
 
         # ✅ 隨機 User-Agent
         user_agents = [
@@ -3273,7 +3273,7 @@ def get_video_data_newest():
         page = context.new_page()
 
         # ✅ 啟用 Stealth 模式
-        stealth_sync(page)
+        #stealth_sync(page)
 
         # ✅ 變更 User-Agent 以模擬真實瀏覽器
         page.set_extra_http_headers({
