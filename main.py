@@ -1569,9 +1569,9 @@ def handle_message(event):
         if group_id and group_id in user_ai_choice:
             ai_model = user_ai_choice[group_id]
         else:
-            ai_model = "deepseek-r1-distill-llama-70b"
+            ai_model = "GPT_4o_Mini"
     else:
-        ai_model = user_ai_choice.get(user_id, "deepseek-r1-distill-llama-70b")
+        ai_model = user_ai_choice.get(user_id, "GPT_4o_Minib")
     if event.source.type == "group":
         if group_id and group_id in user_personality_choice:
             ai_personality = user_personality_choice[group_id]
