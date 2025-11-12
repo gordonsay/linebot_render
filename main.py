@@ -709,7 +709,7 @@ def handle_message(event):
 
         # ✅ 使用 `Gemini` 进行详细分析
         image = PIL.Image.open(image_path)
-        model = genai.GenerativeModel("gemini-1.5-pro")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(
             [
                 {"text": "圖片中你了解到了什麼？ 請以繁體中文輕鬆精簡的口語化回答, 認為我想藉由這張照片跟你聊的內容回覆我。例如：當照片中存在一個主角人物時, 回覆：看起來心情不錯喔, 發生什麼好事了 ; 當照片中為場景時回覆：看起來好美阿, 我知道這裡, 是羅浮宮"},
