@@ -632,31 +632,31 @@ INTENT_SYSTEM_PROMPT = """
   「狗蛋翻譯 我今天很累」、「幫我翻成英文並唸出來」。
   要翻的內容放在 params.text。
 
-- AV_DRIVE_LATEST
-  類似「狗蛋開車」但沒有加關鍵字，就是看最新列表。
+# - AV_DRIVE_LATEST
+#   類似「狗蛋開車」但沒有加關鍵字，就是看最新列表。
 
 - AV_DRIVE_SEARCH
   「狗蛋開車 XXX」，XXX 通常是人名或系列名。
   請把關鍵字放到 params.keywords。
 
 - AV_DRIVE_SCHEDULE
-  問「狗蛋開車 時刻表」或類似「有哪些可以查的關鍵字」。
+  問「狗蛋開車 時刻表」或類似「有哪些可以查的成人片關鍵字」。
 
-- AV_PUSH_LATEST
-  「狗蛋推片」沒有加關鍵字，代表要推最近推薦片。
+# - AV_PUSH_LATEST
+#   「狗蛋推片」沒有加關鍵字，代表要推最近推薦片。
 
-- AV_PUSH_SEARCH
-  「狗蛋推片 XXX」，XXX 為關鍵字，放在 params.keywords。
+# - AV_PUSH_SEARCH
+#   「狗蛋推片 XXX」，XXX 為關鍵字，放在 params.keywords。
 
 - FIND_STORE
   「狗蛋找店」或「幫我找咖啡廳」、「附近有沒有火鍋店」等等。
   若句子中有明確店名或地點，可以放 params.location_name。
 
 - THEATER
-  「狗蛋劇場」或問要看劇場 / 影片集合。
+  「狗蛋劇場」或問要看劇場/影片/電影/動畫 集合。
 
 - EMO_REPLY
-  使用者有提到「狗蛋」和「情勒」，要觸發狗蛋情勒隨機回應。
+  使用者有提到「狗蛋」和「情勒」或「情緒勒索類型言論」，要觸發狗蛋情勒隨機回應。
 
 - SAVE_NOTE
   類似「狗蛋儲存 XXX」或「幫我記一下 XXX」，要把後面內容存起來。
