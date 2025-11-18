@@ -3361,7 +3361,7 @@ def cache_image_to_local(raw_url: str) -> str | None:
             return None
 
     # 回傳給 LINE 用的 HTTPS URL
-    return f"{PUBLIC_BASE_URL}/static/search_images/{filename}"
+    return f"{BASE_URL}/static/search_images/{filename}"
 
 def sanitize_image_url(raw_url: str) -> str | None:
     """清洗 & 驗證圖片 URL，只允許 http / https"""
