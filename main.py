@@ -2812,20 +2812,29 @@ def ask_groq(user_message, model, ai_personality, retries=3, backoff_factor=1.0)
                 return response.choices[0].message.content.strip()
 
             else:
-                # Groq API，加入重試機制
-                chat_completion = client.chat.completions.create(
-                    messages=[
-                        {"role": "system", "content": f"{Prompt_default}，約莫50字內，限制不超過80字，除非當請求為翻譯時, 全部內容都需要完成翻譯不殘留原語言。"},
-                        {"role": "user", "content": user_message},
-                    ],
-                    model=model.lower(),
-                )
-                if not chat_completion.choices:
-                    return "❌ 狗蛋無法回應，請稍後再試。"
+                # # Groq API，加入重試機制
+                # chat_completion = client.chat.completions.create(
+                #     messages=[
+                #         {"role": "system", "content": f"{Prompt_default}，約莫50字內，限制不超過80字，除非當請求為翻譯時, 全部內容都需要完成翻譯不殘留原語言。"},
+                #         {"role": "user", "content": user_message},
+                #     ],
+                #     model=model.lower(),
+                # )
+                # if not chat_completion.choices:
+                #     return "❌ 狗蛋無法回應，請稍後再試。"
 
-                content = chat_completion.choices[0].message.content.strip()
-                content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-                return content
+                # content = chat_completion.choices[0].message.content.strip()
+                # content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+                # return content
+                openai_client = openai.ChatCompletion.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "user", "content": f"{Prompt_default}, 約莫50字內，限制不超過80字，除非當請求為翻譯時, 全部內容都需要完成翻譯不殘留原語言。"},
+                        {"role": "user", "content": user_message}
+                    ]
+                )
+                print(f"📢 [DEBUG] OpenAI API 回應: {openai_client}")
+                return openai_client.choices[0].message.content.strip()
 
         except requests.exceptions.RequestException as e:
             print(f"❌ API 連線失敗 (第 {i+1} 次)：{e}")
@@ -3484,17 +3493,26 @@ def analyze_weather_with_ai(city, temp, humidity, weather_desc, wind_speed):
     3. 回應時請使用繁體中文，字數控制在 50 字內，並用口語化的方式回答。
     """
 
-    # Groq API 邏輯 (保持不變)
-    chat_completion = client.chat.completions.create(
-        messages=[
-                    {"role": "system", "content": "你是一個名叫狗蛋的助手，跟使用者是朋友關係, 盡量只使用繁體中文方式進行幽默回答, 約莫20字內，限制不超過50字"},
-                    {"role": "user", "content": prompt},
-                ],
-        model="deepseek-r1-distill-llama-70b",)
+    # # Groq API 邏輯 (保持不變)
+    # chat_completion = client.chat.completions.create(
+    #     messages=[
+    #                 {"role": "system", "content": "你是一個名叫狗蛋的助手，跟使用者是朋友關係, 盡量只使用繁體中文方式進行幽默回答, 約莫20字內，限制不超過50字"},
+    #                 {"role": "user", "content": prompt},
+    #             ],
+    #     model="deepseek-r1-distill-llama-70b",)
+    chat_completion = openai.ChatCompletion.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "user", "content": f"{Prompt_default}, 約莫50字內，限制不超過80字，除非當請求為翻譯時, 全部內容都需要完成翻譯不殘留原語言。"},
+                        {"role": "user", "content": user_message}
+                    ]
+                )
+                print(f"📢 [DEBUG] OpenAI API 回應: {openai_client}")
+                # return openai_client.choices[0].message.content.strip()
     if not chat_completion.choices:
         return "❌ 狗蛋無法回應，請稍後再試。"
-    content = chat_completion.choices[0].message.content.strip()
-    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+    content = openai_client.choices[0].message.content.strip()
+    # content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
     return content
 
 def get_video_data(search_query):
