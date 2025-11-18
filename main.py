@@ -72,6 +72,9 @@ ALLOWED_BADEGG_USERS = {uid.strip() for uid in allowed_users_str.split(",") if u
 allowed_groups_BADEGG_str = os.getenv("ALLOWED_BADEGG_GROUPS", "")
 ALLOWED_BADEGG_GROUPS = {gid.strip() for gid in allowed_groups_str.split(",") if gid.strip()}
 max_title_length = 70
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+STATIC_IMAGE_DIR = os.path.join(PROJECT_ROOT, "static", "search_images")
+os.makedirs(STATIC_IMAGE_DIR, exist_ok=True)
 
 # Initailize LINE API (v3)
 config = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
@@ -3312,6 +3315,54 @@ def create_flex_message(text, image_url):
     flex_contents = FlexContainer.from_json(flex_json_str)
     return FlexMessage(alt_text=text, contents=flex_contents)
 
+def cache_image_to_local(raw_url: str) -> str | None:
+    """
+    從原始圖片網址下載到本機 static/search_images 底下，
+    回傳給 LINE 使用的 HTTPS URL（走你自己的網域）。
+    """
+    if not raw_url:
+        return None
+
+    try:
+        print(f"⬇️ 嘗試下載圖片: {raw_url}")
+        resp = requests.get(raw_url, timeout=8, verify=False, stream=True)
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"❌ 下載圖片失敗: {e}")
+        return None
+
+    # 判斷副檔名
+    content_type = resp.headers.get("Content-Type", "").lower()
+    ext = ".jpg"
+    if "png" in content_type:
+        ext = ".png"
+    elif "jpeg" in content_type or "jpg" in content_type:
+        ext = ".jpg"
+    elif "webp" in content_type:
+        ext = ".webp"
+
+    # 用 URL 做 hash 當檔名（避免重複）
+    h = hashlib.md5(raw_url.encode("utf-8")).hexdigest()
+    filename = f"{h}{ext}"
+    filepath = os.path.join(STATIC_IMAGE_DIR, filename)
+
+    # 已經抓過就不重抓
+    if os.path.exists(filepath):
+        print(f"📁 圖片已存在，直接使用快取: {filepath}")
+    else:
+        try:
+            with open(filepath, "wb") as f:
+                for chunk in resp.iter_content(8192):
+                    if chunk:
+                        f.write(chunk)
+            print(f"✅ 圖片已儲存: {filepath}")
+        except Exception as e:
+            print(f"❌ 寫入圖片檔案失敗: {e}")
+            return None
+
+    # 回傳給 LINE 用的 HTTPS URL
+    return f"{PUBLIC_BASE_URL}/static/search_images/{filename}"
+
 def sanitize_image_url(raw_url: str) -> str | None:
     """清洗 & 驗證圖片 URL，只允許 http / https"""
     if not raw_url:
@@ -3351,7 +3402,7 @@ def to_line_safe_image_url(url):
     return urlunparse(parsed)
     
 def search_google_image(query):
-    """使用 Google Custom Search API 搜尋可直接顯示的圖片 URL"""
+    """使用 Google Custom Search API 搜尋圖片，下載到本機後回傳自己的 HTTPS URL"""
     search_url = "https://www.googleapis.com/customsearch/v1"
 
     params = {
@@ -3359,12 +3410,13 @@ def search_google_image(query):
         "cx": GOOGLE_CX,
         "key": GOOGLE_SEARCH_KEY,
         "searchType": "image",
-        "num": 4,             
+        "num": 4,               # 多抓幾張，提高可用率
         "imgSize": "xlarge",
         "fileType": "jpg,png",
         "safe": "off",
     }
 
+    # 🚫 要過濾掉的域名（Threads / IG / FB / Meta 全家桶）
     BLOCK_DOMAINS = [
         "threads.net",
         "instagram.com",
@@ -3385,41 +3437,29 @@ def search_google_image(query):
                 print(f"🔍 原始圖片 URL: {raw_url}")
                 if not raw_url:
                     continue
-                    
-                line_url = to_line_safe_image_url(raw_url)
-                if not line_url:
-                    print(f"⚠️ URL scheme 不適用 LINE，丟棄: {raw_url}")
-                    continue
 
-                image_url = sanitize_image_url(line_url)
+                # 先做你原本的 URL 清洗（如果有其他處理邏輯）
+                image_url = sanitize_image_url(raw_url)
                 if not image_url:
                     continue
 
+                # 過濾不想要的網域
                 if any(domain in image_url for domain in BLOCK_DOMAINS):
                     print(f"⚠️ 過濾 Meta/IG/FB/Threads 圖片: {image_url}")
                     continue
 
+                # （可選）過濾帶 ? 參數的 URL
                 if "?" in image_url:
                     print(f"⚠️ 過濾帶參數的 URL: {image_url}")
                     continue
 
-                try:
-                    img_response = requests.get(
-                        image_url,
-                        allow_redirects=False,
-                        timeout=5,
-                        verify=False,
-                    )
-
-                    if img_response.status_code == 200:
-                        print(f"✅ 可用圖片 URL: {image_url}")
-                        return image_url
-                    else:
-                        print(f"⚠️ 圖片回應狀態碼非 200: {img_response.status_code} - {image_url}")
-
-                except Exception as e:
-                    print(f"⚠️ 圖片驗證錯誤: {e}")
-                    continue
+                # 這裡不再要求對方 HTTPS 憑證正常，純粹當作「素材來源」
+                cached_url = cache_image_to_local(image_url)
+                if cached_url:
+                    print(f"✅ 使用本機快取圖片 URL: {cached_url}")
+                    return cached_url
+                else:
+                    print(f"⚠️ 此圖片下載或儲存失敗，換下一張")
 
     except Exception as e:
         print(f"❌ Google Custom Search API 錯誤: {e}")
