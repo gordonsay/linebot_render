@@ -767,7 +767,8 @@ def ask_ai_is_talking_to_bot(message: str) -> bool:
     - 有稱呼機器人（狗蛋）→ true  
     - 明顯是跟機器人講話的語氣 → true  
     - 跟其他人聊天 / 就是在講幹話無關機器人 → false  
-    - 問朋友問題、閒聊、互相嘴 → false  
+    - 問朋友問題、閒聊、互相嘴 → false 
+    - 提到(狗)/(蛋)/(高登)/(惠義)/(大奶)/(胸部) → true  
     
     使用者訊息：{message}
     """
