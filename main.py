@@ -23,7 +23,7 @@ from mutagen.mp3 import MP3
 from urllib.parse import quote
 from langdetect import detect, DetectorFactory
 from supabase import create_client, Client
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 # Load Environment Arguments
 load_dotenv()
@@ -3327,6 +3327,33 @@ def sanitize_image_url(raw_url: str) -> str | None:
 
     return url
 
+def to_line_safe_image_url(url):
+    """
+    讓圖片 URL 變成 LINE 可接受的形式：
+    - 只接受 http / https
+    - http 會改成 https 回傳
+    - 其他 scheme 直接丟掉
+    """
+    if not url:
+        return None
+
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None
+
+    # 只接受 http / https
+    if parsed.scheme not in ("http", "https"):
+        return None
+
+    # 已經是 https，直接用
+    if parsed.scheme == "https":
+        return url
+
+    # http -> https
+    parsed = parsed._replace(scheme="https")
+    return urlunparse(parsed)
+
 def search_google_image(query):
     """使用 Google Custom Search API 搜尋可直接顯示的圖片 URL"""
     search_url = "https://www.googleapis.com/customsearch/v1"
@@ -3353,16 +3380,25 @@ def search_google_image(query):
     ]
 
     try:
-        response = requests.get(search_url, params=params)
+        response = requests.get(search_url, params=params, timeout=6)
+        response.raise_for_status()
         data = response.json()
 
         if "items" in data:
             for item in data["items"]:
                 raw_url = item.get("link")
                 print(f"🔍 原始圖片 URL: {raw_url}")
+                if not raw_url:
+                    continue
 
-                # --- 第一步：先做 URL 清洗 ---
-                image_url = sanitize_image_url(raw_url)
+                # --- 第一步：先把 URL 轉成 LINE 可接受的 https ---
+                line_url = to_line_safe_image_url(raw_url)
+                if not line_url:
+                    print(f"⚠️ URL scheme 不適用 LINE，丟棄: {raw_url}")
+                    continue
+
+                # --- 第二步：再做你原本的 URL 清洗（如果 sanitize_image_url 有做其他處理）---
+                image_url = sanitize_image_url(line_url)
                 if not image_url:
                     continue
 
@@ -3371,18 +3407,24 @@ def search_google_image(query):
                     print(f"⚠️ 過濾 Meta/IG/FB/Threads 圖片: {image_url}")
                     continue
 
-                # ❌ 過濾帶 ? 參數的（常導致 Flex 無法載入）
+                # （可選）❌ 過濾帶 ? 參數的（如果你測過會常影響 Flex，就保留）
                 if "?" in image_url:
                     print(f"⚠️ 過濾帶參數的 URL: {image_url}")
                     continue
 
-                # --- 第二步：確認圖片是否可直接取得（避免 302 / 403）---
+                # --- 第三步：確認圖片是否可直接取得（避免 302 / 403）---
                 try:
-                    img_response = requests.get(image_url, allow_redirects=False, timeout=5)
+                    img_response = requests.get(
+                        image_url,
+                        allow_redirects=False,
+                        timeout=5
+                    )
 
                     if img_response.status_code == 200:
                         print(f"✅ 可用圖片 URL: {image_url}")
                         return image_url
+                    else:
+                        print(f"⚠️ 圖片回應狀態碼非 200: {img_response.status_code} - {image_url}")
 
                 except Exception as e:
                     print(f"⚠️ 圖片驗證錯誤: {e}")
