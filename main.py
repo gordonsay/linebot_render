@@ -636,7 +636,7 @@ INTENT_SYSTEM_PROMPT = """
 #   類似「狗蛋開車」但沒有加關鍵字，就是看最新列表。
 
 - AV_DRIVE_SEARCH
-  「狗蛋開車 XXX」，XXX 通常是人名或系列名。
+  「狗蛋開車 XXX」，XXX 通常是人名或系列名 或是 類似「我想看XXX的片」。
   請把關鍵字放到 params.keywords。
 
 - AV_DRIVE_SCHEDULE
