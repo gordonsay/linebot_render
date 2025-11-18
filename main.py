@@ -18,7 +18,7 @@ import google.generativeai as genai  # ✅ 正确的导入方式
 import PIL.Image
 from io import BytesIO
 from database import save_chat_history, get_recent_chat_history
-import io, uuid
+import io, uuid, hashlib
 from mutagen.mp3 import MP3
 from urllib.parse import quote
 from langdetect import detect, DetectorFactory
