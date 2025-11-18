@@ -3503,8 +3503,8 @@ def analyze_weather_with_ai(city, temp, humidity, weather_desc, wind_speed):
     chat_completion = openai.ChatCompletion.create(
                     model="gpt-4o-mini",
                     messages=[
-                        {"role": "user", "content": f"{Prompt_default}, 約莫50字內，限制不超過80字，除非當請求為翻譯時, 全部內容都需要完成翻譯不殘留原語言。"},
-                        {"role": "user", "content": user_message}
+                        {"role": "user", "content": "你是一個名叫狗蛋的助手，跟使用者是朋友關係, 盡量只使用繁體中文方式進行幽默回答, 約莫20字內，限制不超過50字"},
+                        {"role": "user", "content": prompt}
                     ]
                 )
                 # return openai_client.choices[0].message.content.strip()
