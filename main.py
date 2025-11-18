@@ -772,7 +772,7 @@ def ask_ai_is_talking_to_bot(message: str) -> bool:
     
     使用者訊息：{message}
     """
-
+    model_intent = genai.GenerativeModel("gemini-2.5-flash")
     response = model_intent.generate_content(
         [
             {
