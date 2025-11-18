@@ -23,6 +23,7 @@ from mutagen.mp3 import MP3
 from urllib.parse import quote
 from langdetect import detect, DetectorFactory
 from supabase import create_client, Client
+from urllib.parse import urlparse
 
 # Load Environment Arguments
 load_dotenv()
