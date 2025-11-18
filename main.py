@@ -3507,7 +3507,6 @@ def analyze_weather_with_ai(city, temp, humidity, weather_desc, wind_speed):
                         {"role": "user", "content": user_message}
                     ]
                 )
-                print(f"📢 [DEBUG] OpenAI API 回應: {openai_client}")
                 # return openai_client.choices[0].message.content.strip()
     if not chat_completion.choices:
         return "❌ 狗蛋無法回應，請稍後再試。"
