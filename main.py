@@ -3290,7 +3290,7 @@ def create_flex_message(text, image_url):
             "aspectMode": "fit",
             "action": {
                 "type": "uri",
-                "uri": image_url  # ✅ 點擊後可查看原圖
+                "uri": image_url
             }
         },
         "body": {
@@ -3317,10 +3317,9 @@ def sanitize_image_url(raw_url: str) -> str | None:
     if not raw_url:
         return None
 
-    url = raw_url.strip()  # 清除前後空白/換行
+    url = raw_url.strip()
 
     parsed = urlparse(url)
-    # 只允許 http / https
     if parsed.scheme not in ("http", "https"):
         print(f"⚠️ 無效 URL scheme: {url}")
         return None
@@ -3331,8 +3330,7 @@ def to_line_safe_image_url(url):
     """
     讓圖片 URL 變成 LINE 可接受的形式：
     - 只接受 http / https
-    - http 會改成 https 回傳
-    - 其他 scheme 直接丟掉
+    - http 會改成 https 回傳（即使對方憑證壞掉，我們只是組 URL 給 LINE）
     """
     if not url:
         return None
@@ -3342,18 +3340,16 @@ def to_line_safe_image_url(url):
     except Exception:
         return None
 
-    # 只接受 http / https
     if parsed.scheme not in ("http", "https"):
         return None
 
-    # 已經是 https，直接用
     if parsed.scheme == "https":
         return url
 
     # http -> https
     parsed = parsed._replace(scheme="https")
     return urlunparse(parsed)
-
+    
 def search_google_image(query):
     """使用 Google Custom Search API 搜尋可直接顯示的圖片 URL"""
     search_url = "https://www.googleapis.com/customsearch/v1"
@@ -3363,20 +3359,19 @@ def search_google_image(query):
         "cx": GOOGLE_CX,
         "key": GOOGLE_SEARCH_KEY,
         "searchType": "image",
-        "num": 2,
+        "num": 4,             
         "imgSize": "xlarge",
         "fileType": "jpg,png",
-        "safe": "off"
+        "safe": "off",
     }
 
-    # 🚫 要過濾掉的域名（Threads / IG / FB / Meta 全家桶）
     BLOCK_DOMAINS = [
-        "threads.net",          # Threads 網域
-        "instagram.com",        # IG 主站
-        "cdninstagram.com",     # IG 圖片 CDN
-        "fbcdn.net",            # FB/IG 圖片 CDN
-        "facebook.com",         # FB
-        "meta.com"              # META
+        "threads.net",
+        "instagram.com",
+        "cdninstagram.com",
+        "fbcdn.net",
+        "facebook.com",
+        "meta.com",
     ]
 
     try:
@@ -3390,34 +3385,30 @@ def search_google_image(query):
                 print(f"🔍 原始圖片 URL: {raw_url}")
                 if not raw_url:
                     continue
-
-                # --- 第一步：先把 URL 轉成 LINE 可接受的 https ---
+                    
                 line_url = to_line_safe_image_url(raw_url)
                 if not line_url:
                     print(f"⚠️ URL scheme 不適用 LINE，丟棄: {raw_url}")
                     continue
 
-                # --- 第二步：再做你原本的 URL 清洗（如果 sanitize_image_url 有做其他處理）---
                 image_url = sanitize_image_url(line_url)
                 if not image_url:
                     continue
 
-                # ❌ 過濾 Meta / IG / FB / Threads 圖片
                 if any(domain in image_url for domain in BLOCK_DOMAINS):
                     print(f"⚠️ 過濾 Meta/IG/FB/Threads 圖片: {image_url}")
                     continue
 
-                # （可選）❌ 過濾帶 ? 參數的（如果你測過會常影響 Flex，就保留）
                 if "?" in image_url:
                     print(f"⚠️ 過濾帶參數的 URL: {image_url}")
                     continue
 
-                # --- 第三步：確認圖片是否可直接取得（避免 302 / 403）---
                 try:
                     img_response = requests.get(
                         image_url,
                         allow_redirects=False,
-                        timeout=5
+                        timeout=5,
+                        verify=False,
                     )
 
                     if img_response.status_code == 200:
