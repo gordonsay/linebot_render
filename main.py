@@ -708,17 +708,56 @@ def callback():
 
     return "OK", 200
 
+def ask_ai_is_talking_to_bot(message: str) -> bool:
+    """
+    使用 Gemini 判斷是否是在呼叫「狗蛋」這個機器人
+    回傳：True / False
+    """
+    prompt = f"""
+    你是一個判斷器 請判斷使用者這句話是不是在跟名為「狗蛋」的聊天機器人說話  
+    只回傳 true 或 false 不能加其他字  
+    
+    判斷標準：  
+    - 是命令 / 指令（例如 幫我 查一下 你可以…）→ true  
+    - 有稱呼機器人（狗蛋）→ true  
+    - 明顯是跟機器人講話的語氣 → true  
+    - 跟其他人聊天 / 就是在講幹話無關機器人 → false  
+    - 問朋友問題、閒聊、互相嘴 → false  
+    
+    使用者訊息：{message}
+    """
+
+    response = model_intent.generate_content(
+        [
+            {
+                "text": prompt
+            }
+        ]
+    )
+
+    reply = response.text.strip().lower()
+    return "true" in reply
+
 def should_run_ai_for_text(event, user_message: str) -> bool:
     """
-    判斷這句文字要不要進 AI / Intent 推論：
-    - 群組：一定要出現「狗蛋」才理（避免干擾大家 & 省 token）
-    - 個人聊天：預設都算是在跟 bot 說話
+    新增 AI 判斷邏輯版本：
+    - 群組：先檢查是否包含 "狗蛋"
+      ✔ 包含 → 一定進 AI
+      ✔ 不包含 → 丟給 AI 判斷是否是在叫狗蛋
+    - 個人聊天：永遠進 AI
     """
-    src_type = event.source.type
 
-    if src_type == "group":
-        return "狗蛋" in user_message  
-    return True
+    src_type = event.source.type
+    # 1. 個人聊天 → 一律視為在叫 bot
+    if src_type == "user":
+        return True
+    
+    # 2. 群組 → 若包含關鍵字直接處理
+    if "狗蛋" in user_message:
+        return True
+
+    # 3. 群組 → 沒有關鍵字 → 請 AI 判斷是否在叫狗蛋
+    return ask_ai_is_talking_to_bot(user_message)
 
 def classify_intent(user_text: str) -> dict:
     try:
