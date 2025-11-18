@@ -3310,6 +3310,21 @@ def create_flex_message(text, image_url):
     flex_contents = FlexContainer.from_json(flex_json_str)
     return FlexMessage(alt_text=text, contents=flex_contents)
 
+def sanitize_image_url(raw_url: str) -> str | None:
+    """清洗 & 驗證圖片 URL，只允許 http / https"""
+    if not raw_url:
+        return None
+
+    url = raw_url.strip()  # 清除前後空白/換行
+
+    parsed = urlparse(url)
+    # 只允許 http / https
+    if parsed.scheme not in ("http", "https"):
+        print(f"⚠️ 無效 URL scheme: {url}")
+        return None
+
+    return url
+
 def search_google_image(query):
     """使用 Google Custom Search API 搜尋可直接顯示的圖片 URL"""
     search_url = "https://www.googleapis.com/customsearch/v1"
@@ -3318,12 +3333,22 @@ def search_google_image(query):
         "q": query,
         "cx": GOOGLE_CX,
         "key": GOOGLE_SEARCH_KEY,
-        "searchType": "image",  # 只搜尋圖片
-        "num": 2,  # 取得 2 張圖片，確保至少有 1 張可用
-        "imgSize": "xlarge",  # 嘗試獲取更高清圖片
-        "fileType": "jpg,png",  # 確保回傳的是圖片，不是其他格式
+        "searchType": "image",
+        "num": 2,
+        "imgSize": "xlarge",
+        "fileType": "jpg,png",
         "safe": "off"
     }
+
+    # 🚫 要過濾掉的域名（Threads / IG / FB / Meta 全家桶）
+    BLOCK_DOMAINS = [
+        "threads.net",          # Threads 網域
+        "instagram.com",        # IG 主站
+        "cdninstagram.com",     # IG 圖片 CDN
+        "fbcdn.net",            # FB/IG 圖片 CDN
+        "facebook.com",         # FB
+        "meta.com"              # META
+    ]
 
     try:
         response = requests.get(search_url, params=params)
@@ -3331,21 +3356,41 @@ def search_google_image(query):
 
         if "items" in data:
             for item in data["items"]:
-                image_url = item["link"]
+                raw_url = item.get("link")
+                print(f"🔍 原始圖片 URL: {raw_url}")
 
-                # ❌ 過濾 Facebook / Instagram / 動態圖片 (帶 `?` 參數的)
-                if "fbcdn.net" in image_url or "instagram.com" in image_url or "?" in image_url:
+                # --- 第一步：先做 URL 清洗 ---
+                image_url = sanitize_image_url(raw_url)
+                if not image_url:
                     continue
 
-                # 🔍 確保圖片可以直接存取（不重定向）
-                img_response = requests.get(image_url, allow_redirects=False)
-                if img_response.status_code == 200:
-                    return image_url  # ✅ 返回可用圖片
+                # ❌ 過濾 Meta / IG / FB / Threads 圖片
+                if any(domain in image_url for domain in BLOCK_DOMAINS):
+                    print(f"⚠️ 過濾 Meta/IG/FB/Threads 圖片: {image_url}")
+                    continue
+
+                # ❌ 過濾帶 ? 參數的（常導致 Flex 無法載入）
+                if "?" in image_url:
+                    print(f"⚠️ 過濾帶參數的 URL: {image_url}")
+                    continue
+
+                # --- 第二步：確認圖片是否可直接取得（避免 302 / 403）---
+                try:
+                    img_response = requests.get(image_url, allow_redirects=False, timeout=5)
+
+                    if img_response.status_code == 200:
+                        print(f"✅ 可用圖片 URL: {image_url}")
+                        return image_url
+
+                except Exception as e:
+                    print(f"⚠️ 圖片驗證錯誤: {e}")
+                    continue
 
     except Exception as e:
         print(f"❌ Google Custom Search API 錯誤: {e}")
 
-    return None  # 找不到可顯示的圖片時回傳 None
+    print("❌ 最終無可用圖片 URL")
+    return None
 
 def search_spotify_song(song_name):
     """ 透過 Spotify API 搜尋歌曲並回傳預覽 URL 與歌曲連結 """
