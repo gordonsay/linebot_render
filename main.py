@@ -93,6 +93,7 @@ video_index = {}  # 存放每個用戶目前的影片索引
 user_state = {}
 user_mode = {}
 user_videos_choice = {}
+USED_IMAGE_URLS_BY_QUERY: dict[str, list[str]] = {}
 
 # sticker list
 OFFICIAL_STICKERS = [
@@ -3438,7 +3439,12 @@ def search_google_image(query):
                 if not raw_url:
                     continue
 
-                # 先做你原本的 URL 清洗（如果有其他處理邏輯）
+                # 🔁 1️⃣ 先檢查這張圖這個關鍵字是不是用過
+                if is_image_used(query, raw_url):
+                    print(f"⚠️ 這張圖在「{query}」裡已經用過了，略過")
+                    continue
+
+                # 先做你原本的 URL 清洗（如果有）
                 image_url = sanitize_image_url(raw_url)
                 if not image_url:
                     continue
@@ -3453,19 +3459,51 @@ def search_google_image(query):
                     print(f"⚠️ 過濾帶參數的 URL: {image_url}")
                     continue
 
-                # 這裡不再要求對方 HTTPS 憑證正常，純粹當作「素材來源」
+                # 下載到本機 /static/search_images
                 cached_url = cache_image_to_local(image_url)
                 if cached_url:
+                    # ✅ 2️⃣ 成功使用後才記錄：這個 query 已經用過這張 raw_url
+                    mark_image_used(query, raw_url)
                     print(f"✅ 使用本機快取圖片 URL: {cached_url}")
                     return cached_url
                 else:
                     print(f"⚠️ 此圖片下載或儲存失敗，換下一張")
+
+            # 如果迴圈跑完都沒找到新圖，可以考慮：
+            # 1. 清掉這個 query 的紀錄重新開始，或
+            # 2. 允許重複（目前是直接回 None）
+            print(f"⚠️ 查詢「{query}」沒有新的圖片可以用了（候選都已經用過或失敗）")
 
     except Exception as e:
         print(f"❌ Google Custom Search API 錯誤: {e}")
 
     print("❌ 最終無可用圖片 URL")
     return None
+
+def _norm_query(q: str) -> str:
+    """把 query 正規化（避免 '性感 ' / '性感' 被當成不同 key）"""
+    return (q or "").strip().lower()
+
+
+def is_image_used(query: str, raw_url: str) -> bool:
+    """判斷某個 query 是否已經用過這張 raw_url 圖片"""
+    key = _norm_query(query)
+    used_list = USED_IMAGE_URLS_BY_QUERY.get(key, [])
+    return raw_url in used_list
+
+
+def mark_image_used(query: str, raw_url: str, max_keep: int = 50) -> None:
+    """
+    記錄這張圖片已經被這個 query 用過
+    max_keep：避免 list 無限長，超過就把最舊的丟掉
+    """
+    key = _norm_query(query)
+    used_list = USED_IMAGE_URLS_BY_QUERY.setdefault(key, [])
+    if raw_url in used_list:
+        return
+    used_list.append(raw_url)
+    if len(used_list) > max_keep:
+        USED_IMAGE_URLS_BY_QUERY[key] = used_list[-max_keep:]
 
 def search_spotify_song(song_name):
     """ 透過 Spotify API 搜尋歌曲並回傳預覽 URL 與歌曲連結 """
