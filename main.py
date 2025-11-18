@@ -731,7 +731,7 @@ def should_run_ai_for_text(event, user_message: str) -> bool:
 
 def classify_intent(user_text: str) -> dict:
     try:
-        resp = openai.chat.completions.create(
+        resp = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
