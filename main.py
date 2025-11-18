@@ -557,6 +557,127 @@ GENERAL_DRAMA_SERIES = ["陸劇", "港劇", "台劇", "日劇", "韓劇", "美�
 
 GENERAL_ANIME_SERIES = ["港台動漫", "日韓動漫", "大陸動漫", "歐美動漫", "海外動漫"]
 
+INTENT_SYSTEM_PROMPT = """
+你是一個幫「狗蛋」LINE 機器人做指令分類的系統。
+
+請依照使用者輸入的文字，輸出一個 JSON：
+{
+  "intent": "HELP_COMMANDS | WEATHER_NOW | WEATHER_FORECAST | GENERATE_IMAGE | SHOW_MODEL | CHANGE_MODEL | CHANGE_PERSONALITY | WEB_SEARCH | PERSON_INTRO | IMAGE_SEARCH | PLAY_SONG | TRANSLATE | AV_DRIVE_LATEST | AV_DRIVE_SEARCH | AV_DRIVE_SCHEDULE | AV_PUSH_LATEST | AV_PUSH_SEARCH | FIND_STORE | THEATER | EMO_REPLY | SAVE_NOTE | LEAVE_GROUP | SHOW_ID | UNKNOWN",
+  "params": {
+    "city": null,
+    "prompt": null,
+    "search_query": null,
+    "person_name": null,
+    "image_query": null,
+    "song_name": null,
+    "text": null,
+    "keywords": null,
+    "location_name": null,
+    "raw_text": "使用者原始輸入"
+  }
+}
+
+各 intent 說明（請照此規則判斷）：
+
+- HELP_COMMANDS
+  使用者想問「狗蛋會做什麼」、「有哪些指令」、「狗蛋指令」、「教我用狗蛋」等。
+
+- WEATHER_NOW
+  問現在天氣、氣象，例如：
+  「台北天氣怎樣」、「我想知道台北天氣呢狗蛋」、「新竹會不會下雨」、「幫我查高雄天氣」。
+  請在 params.city 放城市或行政區名稱（例如：台北、新北、台中、高雄、桃園、新竹、竹北、竹東…）。
+  找不到城市就 city = null。
+
+- WEATHER_FORECAST
+  問預報、未來幾天天氣，例如：
+  「幫我看一下台北未來幾天的天氣」、「新竹三天預報」、「台中氣象預報」。
+
+- GENERATE_IMAGE
+  希望狗蛋畫圖、生成圖片，例如：
+  「狗蛋幫我畫一張圖」、「幫我生成一張穿西裝的狗蛋」、「畫一隻貓」。
+  請把要畫的內容放到 params.prompt。
+
+- SHOW_MODEL
+  問現在使用的 AI 模型或人格，例如：
+  「現在用什麼模型」、「當前模型是什麼」、「現在的狗蛋人格是什麼」。
+
+- CHANGE_MODEL
+  想換模型，例如：
+  「換一個比較聰明的模型」、「幫我切成 deepseek」、「狗蛋換模型」。
+
+- CHANGE_PERSONALITY
+  想換人格 / 角色，例如：
+  「換兇一點的狗蛋」、「幫我換人格」、「狗蛋人格換一下」。
+
+- WEB_SEARCH
+  類似「幫我搜尋 XXX」、「查一下 XXX 資訊」、「狗蛋幫我 Google」此類。
+  請把關鍵字放在 params.search_query。
+
+- PERSON_INTRO
+  問某個人物介紹，例如：
+  「狗蛋介紹 馬斯克」、「幫我介紹一下川普」。
+
+- IMAGE_SEARCH
+  問搜圖，例如：
+  「狗蛋幫我搜圖 日本女星」、「找一下 XXX 的照片」。
+  關鍵字放在 params.image_query。
+
+- PLAY_SONG
+  想聽歌，例如：
+  「狗蛋唱歌 告五人」、「幫我放一首周杰倫的歌」。
+  歌名放在 params.song_name。
+
+- TRANSLATE
+  問翻譯＋唸出來，例如：
+  「狗蛋翻譯 我今天很累」、「幫我翻成英文並唸出來」。
+  要翻的內容放在 params.text。
+
+- AV_DRIVE_LATEST
+  類似「狗蛋開車」但沒有加關鍵字，就是看最新列表。
+
+- AV_DRIVE_SEARCH
+  「狗蛋開車 XXX」，XXX 通常是人名或系列名。
+  請把關鍵字放到 params.keywords。
+
+- AV_DRIVE_SCHEDULE
+  問「狗蛋開車 時刻表」或類似「有哪些可以查的關鍵字」。
+
+- AV_PUSH_LATEST
+  「狗蛋推片」沒有加關鍵字，代表要推最近推薦片。
+
+- AV_PUSH_SEARCH
+  「狗蛋推片 XXX」，XXX 為關鍵字，放在 params.keywords。
+
+- FIND_STORE
+  「狗蛋找店」或「幫我找咖啡廳」、「附近有沒有火鍋店」等等。
+  若句子中有明確店名或地點，可以放 params.location_name。
+
+- THEATER
+  「狗蛋劇場」或問要看劇場 / 影片集合。
+
+- EMO_REPLY
+  使用者有提到「狗蛋」和「情勒」，要觸發狗蛋情勒隨機回應。
+
+- SAVE_NOTE
+  類似「狗蛋儲存 XXX」或「幫我記一下 XXX」，要把後面內容存起來。
+  內容放在 params.text。
+
+- LEAVE_GROUP
+  類似「狗蛋出去」、「狗蛋離開這裡」、「你可以退出群組了嗎」。
+
+- SHOW_ID
+  問 user id 或群組 id，例如：
+  「給我 id」、「群組 id」。
+
+- UNKNOWN
+  不屬於以上任何一種，或無法判斷就用 UNKNOWN。
+
+注意：
+1. 必須一律只回 JSON，不要加其他說明文字。
+2. params.raw_text 一定要放使用者原始輸入。
+3. 如果某個欄位用不到，就設為 null。
+"""
+
 # Record AI model choosen by User
 user_ai_choice = {}
 # Record AI model choosen by User
@@ -595,6 +716,50 @@ def callback():
         print(f"❌ [ERROR] Webhook 處理錯誤: {e}")
 
     return "OK", 200
+
+def should_run_ai_for_text(event, user_message: str) -> bool:
+    """
+    判斷這句文字要不要進 AI / Intent 推論：
+    - 群組：一定要出現「狗蛋」才理（避免干擾大家 & 省 token）
+    - 個人聊天：預設都算是在跟 bot 說話
+    """
+    src_type = event.source.type
+
+    if src_type == "group":
+        return "狗蛋" in user_message  
+    return True
+
+def classify_intent(user_text: str) -> dict:
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": INTENT_SYSTEM_PROMPT},
+                {"role": "user", "content": user_text},
+            ],
+            max_tokens=400,
+        )
+        data = json.loads(resp.choices[0].message.content)
+    except Exception as e:
+        print(f"[INTENT ERROR] {e}")
+        data = {
+            "intent": "UNKNOWN",
+            "params": {
+                "city": None,
+                "prompt": None,
+                "search_query": None,
+                "person_name": None,
+                "image_query": None,
+                "song_name": None,
+                "text": None,
+                "keywords": None,
+                "location_name": None,
+                "raw_text": user_text,
+            },
+        }
+    return data
+
 
 @handler.add(FollowEvent)
 def handle_follow(event):
@@ -810,9 +975,30 @@ def handle_message(event):
         return
 
     # 取得使用者與群組資訊（採用 snake_case）
-    user_message = msg_text.strip().lower()
+    user_message_raw = msg_text.strip()
+    user_message = user_message_raw.lower()
+    orig_user_message = user_message_raw
     user_id = event.source.user_id
     group_id = event.source.group_id if event.source.type == "group" else None
+
+    # 先判斷這句話要不要進 AI / Intent（群組沒叫狗蛋就直接略過）
+    if not should_run_ai_for_text(event, user_message):
+        # 群組：沒叫狗蛋直接不理
+        # 私訊：目前一律視為要進 AI，所以不會走到這裡
+        return
+
+    # === 5. AI 模型 / 人格選擇（沿用你原本的邏輯） ===
+    if group_id and group_id in user_ai_choice:
+        ai_model_for_debug = user_ai_choice[group_id]
+    else:
+        ai_model_for_debug = user_ai_choice.get(user_id, "GPT_4o_Mini")
+
+    if group_id and group_id in user_personality_choice:
+        ai_personality_for_debug = user_personality_choice[group_id]
+    else:
+        ai_personality_for_debug = user_personality_choice.get(user_id, "normal_egg")
+
+    print(f"📢 [DEBUG] {user_id if not group_id else group_id} 當前模型: {ai_model_for_debug}, 人格: {ai_personality_for_debug}")
 
     if "狗蛋儲存" in user_message:
         user_message_history = user_message.replace("狗蛋儲存", "").strip()
@@ -827,19 +1013,134 @@ def handle_message(event):
         send_response(event, reply_request)
         return
 
-    # 檢查目前選用的 AI 模型
-    if group_id and group_id in user_ai_choice:
-        ai_model = user_ai_choice[group_id]
-    else:
-        ai_model = user_ai_choice.get(user_id, "GPT_4o_Mini")
+    # # 檢查目前選用的 AI 模型
+    # if group_id and group_id in user_ai_choice:
+    #     ai_model = user_ai_choice[group_id]
+    # else:
+    #     ai_model = user_ai_choice.get(user_id, "GPT_4o_Mini")
 
-    # 檢查目前選用的 AI 人格
-    if group_id and group_id in user_personality_choice:
-        ai_model = user_personality_choice[group_id]
-    else:
-        ai_model = user_personality_choice.get(user_id, "normal_egg")
+    # # 檢查目前選用的 AI 人格
+    # if group_id and group_id in user_personality_choice:
+    #     ai_model = user_personality_choice[group_id]
+    # else:
+    #     ai_model = user_personality_choice.get(user_id, "normal_egg")
 
-    print(f"📢 [DEBUG] {user_id if not group_id else group_id} 當前模型: {ai_model}")
+    # print(f"📢 [DEBUG] {user_id if not group_id else group_id} 當前模型: {ai_model}")
+    # === 7. Intent 推論：把自然語句 → 轉成「狗蛋制式指令字串」 ===
+    intent_data = classify_intent(orig_user_message)
+    intent = intent_data.get("intent", "UNKNOWN")
+    params = intent_data.get("params") or {}
+    rewritten_by_intent = False
+
+    def p(key, default=None):
+        return params.get(key, default) if isinstance(params, dict) else default
+
+    if intent == "HELP_COMMANDS":
+        user_message = "狗蛋指令"
+        rewritten_by_intent = True
+
+    elif intent == "WEATHER_NOW":
+        city = p("city", "") or ""
+        user_message = f"狗蛋氣象 {city}".strip()
+        rewritten_by_intent = True
+
+    elif intent == "WEATHER_FORECAST":
+        city = p("city", "") or ""
+        user_message = f"狗蛋預報 {city}".strip()
+        rewritten_by_intent = True
+
+    elif intent == "GENERATE_IMAGE":
+        prompt = p("prompt", "") or ""
+        user_message = f"狗蛋生成 {prompt}".strip()
+        rewritten_by_intent = True
+
+    elif intent == "SHOW_MODEL":
+        user_message = "當前模型"
+        rewritten_by_intent = True
+
+    elif intent == "CHANGE_MODEL":
+        user_message = "換 模型"
+        rewritten_by_intent = True
+
+    elif intent == "CHANGE_PERSONALITY":
+        user_message = "換 人格"
+        rewritten_by_intent = True
+
+    elif intent == "WEB_SEARCH":
+        q = p("search_query", "") or ""
+        user_message = f"狗蛋搜尋 {q}".strip()
+        rewritten_by_intent = True
+
+    elif intent == "PERSON_INTRO":
+        name = p("person_name", "") or ""
+        user_message = f"狗蛋介紹 {name}".strip()
+        rewritten_by_intent = True
+
+    elif intent == "IMAGE_SEARCH":
+        q = p("image_query", "") or ""
+        user_message = f"狗蛋搜圖 {q}".strip()
+        rewritten_by_intent = True
+
+    elif intent == "PLAY_SONG":
+        song = p("song_name", "") or ""
+        user_message = f"狗蛋唱歌 {song}".strip()
+        rewritten_by_intent = True
+
+    elif intent == "TRANSLATE":
+        text_to_translate = p("text", "") or ""
+        user_message = f"狗蛋翻譯 {text_to_translate}".strip()
+        rewritten_by_intent = True
+
+    elif intent == "AV_DRIVE_LATEST":
+        user_message = "狗蛋開車"
+        rewritten_by_intent = True
+
+    elif intent == "AV_DRIVE_SCHEDULE":
+        user_message = "狗蛋開車 時刻表"
+        rewritten_by_intent = True
+
+    elif intent == "AV_DRIVE_SEARCH":
+        kw = p("keywords", "") or ""
+        user_message = f"狗蛋開車 {kw}".strip()
+        rewritten_by_intent = True
+
+    elif intent == "AV_PUSH_LATEST":
+        user_message = "狗蛋推片"
+        rewritten_by_intent = True
+
+    elif intent == "AV_PUSH_SEARCH":
+        kw = p("keywords", "") or ""
+        user_message = f"狗蛋推片 {kw}".strip()
+        rewritten_by_intent = True
+
+    elif intent == "FIND_STORE":
+        loc = p("location_name", "") or ""
+        if loc:
+            user_message = f"狗蛋找店 {loc}".strip()
+        else:
+            user_message = "狗蛋找店"
+        rewritten_by_intent = True
+
+    elif intent == "THEATER":
+        user_message = "狗蛋劇場"
+        rewritten_by_intent = True
+
+    elif intent == "EMO_REPLY":
+        user_message = "狗蛋情勒"
+        rewritten_by_intent = True
+
+    elif intent == "SAVE_NOTE":
+        text_to_save = p("text", "") or ""
+        user_message = f"狗蛋儲存 {text_to_save}".strip()
+        rewritten_by_intent = True
+
+    elif intent == "LEAVE_GROUP":
+        user_message = "狗蛋出去"
+        rewritten_by_intent = True
+
+    elif intent == "SHOW_ID":
+        user_message = "給我 id"
+        rewritten_by_intent = True
 
     # (1) 「給我id」：若訊息中同時包含「給我」和「id」
     if "給我" in user_message and "id" in user_message:
@@ -1140,8 +1441,8 @@ def handle_message(event):
         return
 
     if user_message.startswith("狗蛋翻譯"):
-        user_message = user_message.replace("狗蛋翻譯", "").strip()
-        gpt_reply = ask_translate(user_message, "deepseek-r1-distill-llama-70b")
+        to_message = user_message.replace("狗蛋翻譯", "").strip()
+        gpt_reply = ask_translate(to_message, "deepseek-r1-distill-llama-70b")
     
         # 將回覆文字轉換成語音資料
         audio_data = text_to_speech(gpt_reply, rate=1)
