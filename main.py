@@ -619,7 +619,7 @@ INTENT_SYSTEM_PROMPT = """
 
 - IMAGE_SEARCH
   問搜圖，例如：
-  「狗蛋幫我搜圖 日本女星」、「找一下 XXX 的照片」。
+  「狗蛋幫我搜圖 日本女星」、「找一下 XXX 的照片」 或是 「XXX 的圖」。
   關鍵字放在 params.image_query。
 
 - PLAY_SONG
