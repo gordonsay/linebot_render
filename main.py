@@ -3510,7 +3510,7 @@ def analyze_weather_with_ai(city, temp, humidity, weather_desc, wind_speed):
                 # return openai_client.choices[0].message.content.strip()
     if not chat_completion.choices:
         return "❌ 狗蛋無法回應，請稍後再試。"
-    content = openai_client.choices[0].message.content.strip()
+    content = chat_completion.choices[0].message.content.strip()
     # content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
     return content
 
