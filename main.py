@@ -789,6 +789,59 @@ def ask_ai_is_talking_to_bot(message: str) -> bool:
     reply = response.text.strip().lower()
     return "true" in reply
 
+def ask_ai_is_talking_to_bot_gpt(message: str) -> bool:
+    """
+    使用 GPT 判斷是否是在呼叫「狗蛋」這個機器人
+    回傳：True / False
+    """
+
+    prompt = f"""
+你是一個「只輸出 true 或 false」的判斷器。
+
+請判斷使用者這句話是不是在跟名為「狗蛋」的聊天機器人說話。
+只回傳 true 或 false，不能加其他字，不能加標點，不能多解釋。
+
+判斷標準：
+- 是命令 / 指令（例如 幫我 / 查一下 / 你可以…）→ true  
+- 有稱呼機器人（狗蛋）→ true  
+- 明顯是跟機器人講話的語氣 → true  
+- 跟其他人聊天 / 就是在講幹話無關機器人 → false  
+- 問朋友問題、閒聊、互相嘴 → false  
+- 提到「狗蛋」或包含「狗」或「蛋」相關暱稱，且看起來像是在叫機器人 → true  
+
+使用者訊息：{message}
+請只輸出一個單字：true 或 false（小寫）。
+"""
+
+    try:
+        completion = openai.ChatCompletion.create(
+            model="gpt-4o-mini",  # 之後想換 gpt-4.1-mini 也可以
+            messages=[
+                {
+                    "role": "system",
+                    "content": "你是一個判斷器，只能輸出 true 或 false。"
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        )
+
+        reply = completion.choices[0].message.content.strip().lower()
+        print(f"📢 [DEBUG] GPT 判斷回應: {reply}")
+
+        # 保守一點：只要開頭是 "true" 就當 True
+        if reply.startswith("true"):
+            return True
+        else:
+            return False
+
+    except Exception as e:
+        print(f"❌ GPT 判斷錯誤: {e}")
+        # 為了安全，遇錯誤時你可以決定要回 False 或 True
+        return False
+
 def should_run_ai_for_text(event, user_message: str) -> bool:
     """
     新增 AI 判斷邏輯版本：
@@ -808,7 +861,7 @@ def should_run_ai_for_text(event, user_message: str) -> bool:
         return True
 
     # 3. 群組 → 沒有關鍵字 → 請 AI 判斷是否在叫狗蛋
-    return ask_ai_is_talking_to_bot(user_message)
+    return ask_ai_is_talking_to_bot_gpt(user_message)
 
 def classify_intent(user_text: str) -> dict:
     try:
