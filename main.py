@@ -3187,6 +3187,7 @@ def convert_prompt_to_english_with_gemini(ch_prompt: str) -> str:
 
 
 def generate_image_with_pollinations(prompt: str) -> str:
+    import urllib
     """
     使用 Pollinations 的免費圖像 API 生成圖片，返回圖片 URL。
     ※ 會先用 Gemini 把 Chinese prompt 轉成 English prompt
