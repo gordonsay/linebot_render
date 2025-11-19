@@ -3089,6 +3089,82 @@ def random_reply(reply_token, target, messaging_api):
     )
     messaging_api.reply_message(reply_request)
 
+def convert_prompt_to_english_with_gemini(ch_prompt: str) -> str:
+    """
+    使用 Gemini 將中文 prompt 轉換成高品質英文 prompt（適合圖像生成）
+    回傳：英文 prompt 字串
+    """
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+
+        system_prompt = """
+你是一個專門將「中文敘述」轉換成「英文繪圖提示」的 AI。
+請將使用者輸入的中文內容，轉換成 *適合圖像生成* 的英文 prompt。
+
+轉換規則：
+1. 語氣專業自然，不要靠北，不要搞笑。
+2. 描述具體、乾淨、明確。
+3. 使用英語，避免口語用詞。
+4. 增加必要的細節以提升繪圖品質，如：lighting, atmosphere, style。
+5. 不要加入「故事」「主觀情緒」「旁白」。
+6. 不要提到你自己、不要說你在翻譯。
+7. 僅輸出英文 prompt，不要多餘文字。
+
+示例：
+中文：一隻可愛的狗蛋，但穿著工程師外套
+英文：A cute character named DogEgg wearing an engineer jacket, soft lighting, clean background, high-quality illustration
+        """
+
+        response = model.generate_content(
+            [
+                {"text": system_prompt},
+                {"text": ch_prompt}
+            ]
+        )
+
+        eng_prompt = response.text.strip()
+        print(f"[Gemini 英文 prompt] {eng_prompt}")
+        return eng_prompt
+
+    except Exception as e:
+        print(f"❌ Gemini 英文轉換錯誤: {e}")
+        # fallback：直接用中文丟給 Pollinations（品質較差）
+        return ch_prompt
+
+
+
+def generate_image_with_pollinations(prompt: str) -> str:
+    """
+    使用 Pollinations 的免費圖像 API 生成圖片，返回圖片 URL。
+    ※ 會先用 Gemini 把 Chinese prompt 轉成 English prompt
+    """
+    try:
+        # 1) 中文 → 英文（提高 Pollinations 生成品質）
+        eng_prompt = convert_prompt_to_english_with_gemini(prompt)
+
+        # 2) URL encode
+        encoded_prompt = urllib.parse.quote(eng_prompt)
+
+        base_url = "https://image.pollinations.ai/prompt"
+        params = {
+            "width": "1024",
+            "height": "1024",
+            "nologo": "true",
+            # 你也可以加 seed： "seed": "42"
+        }
+
+        query = urllib.parse.urlencode(params)
+
+        # 最終圖片 URL（可直接給 Line）
+        image_url = f"{base_url}/{encoded_prompt}?{query}"
+
+        print(f"生成的圖片 URL (Pollinations)：{image_url}")
+        return image_url
+
+    except Exception as e:
+        print(f"❌ Pollinations 生圖錯誤: {e}")
+        return None
+
 def generate_image_with_openai(prompt):
     """
     使用 OpenAI 圖像生成 API 生成圖片，返回圖片 URL。
@@ -3122,7 +3198,7 @@ def generate_image_with_openai(prompt):
         return None
 
 def async_generate_and_send_image(target_id, prompt, messaging_api):
-    image_url = generate_image_with_openai(prompt)
+    image_url = generate_image_with_pollinations(prompt)
     if image_url:
         push_request = PushMessageRequest(
             to=target_id,
@@ -3144,7 +3220,7 @@ def handle_generate_image_command(reply_token, prompt, messaging_api):
     messages = []
 
     # 同步呼叫 OpenAI 圖像生成 API
-    image_url = generate_image_with_openai(prompt)
+    image_url = generate_image_with_pollinations(prompt)
     if image_url:
         messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
         messages.append(TextMessage(text="生成完成, 你瞧瞧🐧"))
