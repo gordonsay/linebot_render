@@ -3281,10 +3281,22 @@ def generate_image_with_openai(prompt: str) -> str | None:
 
     try:
         print(f"[DEBUG] 呼叫 gpt-image-1-mini, prompt={prompt}")
-        resp = requests.post(url, headers=headers, json=payload, timeout=90)
-        resp.raise_for_status()
-        data = resp.json()
+        resp = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=(5, 20),  # (連線 5 秒, 回應 20 秒)
+        )
 
+        # ★ 這裡直接印出實際使用的 HTTP method & 狀態碼
+        print(f"[DEBUG] OpenAI request method = {resp.request.method}, status = {resp.status_code}")
+
+        if resp.status_code != 200:
+            print("❌ OpenAI 回傳非 200")
+            print(f"❌ OpenAI 回傳內容：{resp.text}")
+            return None
+
+        data = resp.json()
         items = data.get("data", [])
         if not items:
             print("❌ 生成圖片時沒有回傳任何 data")
@@ -3309,6 +3321,9 @@ def generate_image_with_openai(prompt: str) -> str | None:
         print(f"✅ 生成圖片成功，URL：{image_url}")
         return image_url
 
+    except requests.exceptions.Timeout:
+        print("❌ 生成圖像逾時（超過 20 秒），放棄這次生成")
+        return None
     except Exception as e:
         print(f"❌ 生成圖像錯誤: {e}")
         return None
