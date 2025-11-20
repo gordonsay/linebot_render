@@ -3274,7 +3274,7 @@ def handle_generate_image_command(reply_token, prompt, messaging_api):
     messages = []
 
     # 同步呼叫 OpenAI 圖像生成 API
-    image_url = generate_image_with_pollinations(prompt)
+    image_url = generate_image_with_openai(prompt)
     if image_url:
         messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
         messages.append(TextMessage(text="生成完成, 你瞧瞧🐧"))
