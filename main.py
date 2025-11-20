@@ -24,7 +24,6 @@ from urllib.parse import quote
 from langdetect import detect, DetectorFactory
 from supabase import create_client, Client
 from urllib.parse import urlparse, urlunparse
-from openai import OpenAI
 
 # Load Environment Arguments
 load_dotenv()
@@ -3252,26 +3251,34 @@ def generate_image_with_pollinations(prompt: str) -> str:
 #         print(f"❌ 生成圖像錯誤: {e}")
 #         return None
 
-def generate_image_with_openai(prompt: str) -> bytes | None:
+def generate_image_with_openai(prompt: str):
+    import base64
     """
-    使用 GPT-IMAGE-1 系列生成圖片，回傳「圖片原始 bytes」。
-    後續你要自己存檔 / 上傳 CDN，才會有 URL 可以給 LINE。
+    使用舊版 openai 套件呼叫 GPT-IMAGE-1-MINI，
+    回傳圖片 bytes（之後你自己存檔或上傳圖床產生 URL）。
     """
     try:
-        result = OpenAI().images.generate(
-            model="gpt-image-1-mini",  # 或 "gpt-image-1"
+        resp = openai.Image.create(
+            model="gpt-image-1-mini",   # 或 "gpt-image-1"
             prompt=prompt,
-            size="1024x1024",          # gpt-image-1 系列只接受 1024/1536 組合
-            # quality="low",           # 想省錢可以加這個
-            # output_format="jpeg",    # 預設是 png，想壓小可以選 jpeg/webp
+            n=1,
+            size="1024x1024",
+            response_format="b64_json",  # 重點：要這個
         )
 
-        # gpt-image-1 / -mini 這裡是 b64_json，不是 url
-        image_base64 = result.data[0].b64_json
-        image_bytes = base64.b64decode(image_base64)
+        data = resp.get("data", [])
+        if not data:
+            print("❌ 生成圖片時沒有回傳任何 data")
+            return None
 
-        print(f"✅ 生成圖片成功，大小：{len(image_bytes)} bytes")
-        return image_bytes
+        b64 = data[0].get("b64_json")
+        if not b64:
+            print("❌ 回傳內容裡沒有 b64_json")
+            return None
+
+        img_bytes = base64.b64decode(b64)
+        print(f"✅ 生成圖片成功，大小 {len(img_bytes)} bytes")
+        return img_bytes
 
     except Exception as e:
         print(f"❌ 生成圖像錯誤: {e}")
