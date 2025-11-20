@@ -72,7 +72,7 @@ ALLOWED_BADEGG_USERS = {uid.strip() for uid in allowed_users_str.split(",") if u
 allowed_groups_BADEGG_str = os.getenv("ALLOWED_BADEGG_GROUPS", "")
 ALLOWED_BADEGG_GROUPS = {gid.strip() for gid in allowed_groups_str.split(",") if gid.strip()}
 max_title_length = 70
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os..dirname(os..abspath(__file__))
 STATIC_IMAGE_DIR = os.path.join(PROJECT_ROOT, "static", "search_images")
 os.makedirs(STATIC_IMAGE_DIR, exist_ok=True)
 
@@ -3251,19 +3251,25 @@ def generate_image_with_pollinations(prompt: str) -> str:
 #         print(f"❌ 生成圖像錯誤: {e}")
 #         return None
 
-def generate_image_with_openai(prompt: str):
-    import base64
+def generate_image_with_openai(prompt: str) -> str | None:
+    from pathlib import Path
+    BASE_DIR = Path(__file__).resolve().parent
+    GENERATED_DIR = BASE_DIR / "static" / "generated"
     """
-    使用舊版 openai 套件呼叫 GPT-IMAGE-1-MINI，
-    回傳圖片 bytes（之後你自己存檔或上傳圖床產生 URL）。
+    使用舊版 openai.Image.create 呼叫 gpt-image-1-mini
+    - 不帶 response_format（避免 Unknown parameter）
+    - 若回傳 b64_json 就自己解碼存檔
+    - 若回傳 url 就直接用
+    回傳：給 LINE 用的圖片 URL（https）
     """
     try:
         resp = openai.Image.create(
-            model="gpt-image-1-mini",   # 或 "gpt-image-1"
+            model="gpt-image-1-mini",
             prompt=prompt,
             n=1,
             size="1024x1024",
-            response_format="b64_json",  # 重點：要這個
+            # ⚠️ 這行拿掉，避免 Unknown parameter
+            # response_format="b64_json",
         )
 
         data = resp.get("data", [])
@@ -3271,14 +3277,31 @@ def generate_image_with_openai(prompt: str):
             print("❌ 生成圖片時沒有回傳任何 data")
             return None
 
-        b64 = data[0].get("b64_json")
-        if not b64:
-            print("❌ 回傳內容裡沒有 b64_json")
-            return None
+        first = data[0]
 
-        img_bytes = base64.b64decode(b64)
-        print(f"✅ 生成圖片成功，大小 {len(img_bytes)} bytes")
-        return img_bytes
+        # 1️⃣ 如果有 b64_json，自己存檔
+        if "b64_json" in first and first["b64_json"]:
+            b64 = first["b64_json"]
+            img_bytes = base64.b64decode(b64)
+
+            GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+            filename = f"{int(time.time())}_{uuid.uuid4().hex}.png"
+            filepath = GENERATED_DIR / filename
+            with open(filepath, "wb") as f:
+                f.write(img_bytes)
+
+            image_url = f"{PUBLIC_BASE_URL}/static/generated/{filename}"
+            print(f"✅ 生成圖片成功（b64），URL：{image_url}")
+            return image_url
+
+        # 2️⃣ 否則嘗試拿 url（有些路徑會直接給 URL）
+        if "url" in first and first["url"]:
+            image_url = first["url"]
+            print(f"✅ 生成圖片成功（url），URL：{image_url}")
+            return image_url
+
+        print("❌ 生成圖片回傳格式未知，沒有 b64_json 也沒有 url")
+        return None
 
     except Exception as e:
         print(f"❌ 生成圖像錯誤: {e}")
