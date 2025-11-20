@@ -24,6 +24,7 @@ from urllib.parse import quote
 from langdetect import detect, DetectorFactory
 from supabase import create_client, Client
 from urllib.parse import urlparse, urlunparse
+from openai import OpenAI
 
 # Load Environment Arguments
 load_dotenv()
@@ -3219,34 +3220,59 @@ def generate_image_with_pollinations(prompt: str) -> str:
         print(f"❌ Pollinations 生圖錯誤: {e}")
         return None
 
-def generate_image_with_openai(prompt):
+# def generate_image_with_openai(prompt):
+#     """
+#     使用 OpenAI 圖像生成 API 生成圖片，返回圖片 URL。
+#     參數:
+#       prompt: 圖像生成提示文字
+#     """
+#     try:
+#         #from openai import OpenAI
+#         #client_openai_image = OpenAI()
+#         #response = client_openai_image.image.generate(
+#         #    model="gpt-image-1",
+#         #   prompt=f"請根據描述生成圖片。如果描述涉及人物，以可愛卡通風格呈現；如果描述涉及物品，請生成清晰且精美的物品圖像。 描述:{prompt}",
+#         #    n = 1,
+#         #    size = "512x512"
+#         #)
+#         response = openai.Image.create(
+#             model="gpt-image-1-mini",
+#             prompt=f"{prompt}",
+#             n=1,
+#             size="1024x1024"
+#         )
+#         data = response.get("data", [])
+#         if not data or len(data) == 0:
+#             print("❌ 生成圖片時沒有回傳任何資料")
+#             return None
+#         image_url = data[0].get("url")
+#         print(f"生成的圖片 URL：{image_url}")
+#         return image_url
+#     except Exception as e:
+#         print(f"❌ 生成圖像錯誤: {e}")
+#         return None
+
+def generate_image_with_openai(prompt: str) -> bytes | None:
     """
-    使用 OpenAI 圖像生成 API 生成圖片，返回圖片 URL。
-    參數:
-      prompt: 圖像生成提示文字
+    使用 GPT-IMAGE-1 系列生成圖片，回傳「圖片原始 bytes」。
+    後續你要自己存檔 / 上傳 CDN，才會有 URL 可以給 LINE。
     """
     try:
-        #from openai import OpenAI
-        #client_openai_image = OpenAI()
-        #response = client_openai_image.image.generate(
-        #    model="gpt-image-1",
-        #   prompt=f"請根據描述生成圖片。如果描述涉及人物，以可愛卡通風格呈現；如果描述涉及物品，請生成清晰且精美的物品圖像。 描述:{prompt}",
-        #    n = 1,
-        #    size = "512x512"
-        #)
-        response = openai.Image.create(
-            model="gpt-image-1-mini",
-            prompt=f"{prompt}",
-            n=1,
-            size="1024x1024"
+        result = OpenAI().images.generate(
+            model="gpt-image-1-mini",  # 或 "gpt-image-1"
+            prompt=prompt,
+            size="1024x1024",          # gpt-image-1 系列只接受 1024/1536 組合
+            # quality="low",           # 想省錢可以加這個
+            # output_format="jpeg",    # 預設是 png，想壓小可以選 jpeg/webp
         )
-        data = response.get("data", [])
-        if not data or len(data) == 0:
-            print("❌ 生成圖片時沒有回傳任何資料")
-            return None
-        image_url = data[0].get("url")
-        print(f"生成的圖片 URL：{image_url}")
-        return image_url
+
+        # gpt-image-1 / -mini 這裡是 b64_json，不是 url
+        image_base64 = result.data[0].b64_json
+        image_bytes = base64.b64decode(image_base64)
+
+        print(f"✅ 生成圖片成功，大小：{len(image_bytes)} bytes")
+        return image_bytes
+
     except Exception as e:
         print(f"❌ 生成圖像錯誤: {e}")
         return None
