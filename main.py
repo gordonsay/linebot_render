@@ -3254,15 +3254,10 @@ def generate_image_with_pollinations(prompt: str) -> str:
 def generate_image_with_openai(prompt: str) -> str | None:
     from pathlib import Path
     import base64
+
     BASE_DIR = Path(__file__).resolve().parent
     GENERATED_DIR = BASE_DIR / "static" / "generated"
-    """
-    直接用 HTTP 呼叫 gpt-image-1-mini，回傳 LINE 可用的圖片 URL。
-    - 呼叫 /v1/images/generations
-    - 要求 response_format = b64_json
-    - 解碼後存到 static/generated
-    - 回傳 https://.../static/generated/xxx.png
-    """
+
     if not OPENAI_API_KEY:
         print("❌ 沒有設定 OPENAI_API_KEY")
         return None
@@ -3276,19 +3271,13 @@ def generate_image_with_openai(prompt: str) -> str | None:
         "model": "gpt-image-1-mini",
         "prompt": prompt,
         "size": "1024x1024",
-        "response_format": "b64_json",
+        # ⛔ 這行拿掉，因為後端說 unknown_parameter
+        # "response_format": "b64_json",
     }
 
     try:
         print(f"[DEBUG] 呼叫 gpt-image-1-mini, prompt={prompt}")
-        resp = requests.post(
-            url,
-            headers=headers,
-            json=payload,
-            timeout=(5, 20),  # (連線 5 秒, 回應 20 秒)
-        )
-
-        # ★ 這裡直接印出實際使用的 HTTP method & 狀態碼
+        resp = requests.post(url, headers=headers, json=payload, timeout=(5, 20))
         print(f"[DEBUG] OpenAI request method = {resp.request.method}, status = {resp.status_code}")
 
         if resp.status_code != 200:
@@ -3302,24 +3291,32 @@ def generate_image_with_openai(prompt: str) -> str | None:
             print("❌ 生成圖片時沒有回傳任何 data")
             return None
 
-        b64 = items[0].get("b64_json")
-        if not b64:
-            print("❌ 回傳內容裡沒有 b64_json")
-            return None
+        first = items[0]
 
-        # 解碼 & 寫檔
-        img_bytes = base64.b64decode(b64)
-        GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+        # ⭐ 1️⃣ 優先處理 b64_json：自己解碼存檔
+        if "b64_json" in first and first["b64_json"]:
+            b64 = first["b64_json"]
+            img_bytes = base64.b64decode(b64)
 
-        filename = f"{int(time.time())}_{uuid.uuid4().hex}.png"
-        filepath = GENERATED_DIR / filename
+            GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+            filename = f"{int(time.time())}_{uuid.uuid4().hex}.png"
+            filepath = GENERATED_DIR / filename
 
-        with open(filepath, "wb") as f:
-            f.write(img_bytes)
+            with open(filepath, "wb") as f:
+                f.write(img_bytes)
 
-        image_url = f"{BASE_URL}/static/generated/{filename}"
-        print(f"✅ 生成圖片成功，URL：{image_url}")
-        return image_url
+            image_url = f"{BASE_URL}/static/generated/{filename}"
+            print(f"✅ 生成圖片成功（b64_json），URL：{image_url}")
+            return image_url
+
+        # ⭐ 2️⃣ 否則如果有 url，就直接用 url 當圖源
+        if "url" in first and first["url"]:
+            image_url = first["url"]
+            print(f"✅ 生成圖片成功（url），URL：{image_url}")
+            return image_url
+
+        print("❌ 生成圖片回傳格式未知，沒有 b64_json 也沒有 url")
+        return None
 
     except requests.exceptions.Timeout:
         print("❌ 生成圖像逾時（超過 20 秒），放棄這次生成")
@@ -3327,7 +3324,7 @@ def generate_image_with_openai(prompt: str) -> str | None:
     except Exception as e:
         print(f"❌ 生成圖像錯誤: {e}")
         return None
-
+        
 def async_generate_and_send_image(target_id, prompt, messaging_api):
     image_url = generate_image_with_pollinations(prompt)
     if image_url:
