@@ -3253,6 +3253,7 @@ def generate_image_with_pollinations(prompt: str) -> str:
 
 def generate_image_with_openai(prompt: str) -> str | None:
     from pathlib import Path
+    import base64
     BASE_DIR = Path(__file__).resolve().parent
     GENERATED_DIR = BASE_DIR / "static" / "generated"
     """
