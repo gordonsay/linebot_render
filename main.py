@@ -3277,7 +3277,7 @@ def generate_image_with_openai(prompt: str) -> str | None:
 
     try:
         print(f"[DEBUG] 呼叫 gpt-image-1-mini, prompt={prompt}")
-        resp = requests.post(url, headers=headers, json=payload, timeout=(5, 20))
+        resp = requests.post(url, headers=headers, json=payload, timeout=(5, 28))
         print(f"[DEBUG] OpenAI request method = {resp.request.method}, status = {resp.status_code}")
 
         if resp.status_code != 200:
