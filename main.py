@@ -3291,7 +3291,7 @@ def generate_image_with_openai(prompt: str) -> str | None:
             with open(filepath, "wb") as f:
                 f.write(img_bytes)
 
-            image_url = f"{PUBLIC_BASE_URL}/static/generated/{filename}"
+            image_url = f"{BASE_URL}/static/generated/{filename}"
             print(f"✅ 生成圖片成功（b64），URL：{image_url}")
             return image_url
 
