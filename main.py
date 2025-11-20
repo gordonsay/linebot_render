@@ -72,7 +72,7 @@ ALLOWED_BADEGG_USERS = {uid.strip() for uid in allowed_users_str.split(",") if u
 allowed_groups_BADEGG_str = os.getenv("ALLOWED_BADEGG_GROUPS", "")
 ALLOWED_BADEGG_GROUPS = {gid.strip() for gid in allowed_groups_str.split(",") if gid.strip()}
 max_title_length = 70
-PROJECT_ROOT = os..dirname(os..abspath(__file__))
+PROJECT_ROOT = os.dirname(os.abspath(__file__))
 STATIC_IMAGE_DIR = os.path.join(PROJECT_ROOT, "static", "search_images")
 os.makedirs(STATIC_IMAGE_DIR, exist_ok=True)
 
