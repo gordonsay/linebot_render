@@ -3767,51 +3767,64 @@ def search_instagram_images_list(query, count=1):
 
 def cache_image_to_local(raw_url: str) -> str | None:
     """
-    從原始圖片網址下載到本機 static/search_images 底下，
-    回傳給 LINE 使用的 HTTPS URL（走你自己的網域）。
+    [升級版] 從原始圖片網址下載到本機
+    新增功能：
+    1. 加入 User-Agent 偽裝 (解決 IG/Twitter 擋爬蟲)
+    2. 嚴格檢查 Content-Type (防止把 404 網頁存成圖片)
     """
     if not raw_url:
         return None
 
+    # 偽裝成 Chrome 瀏覽器
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
     try:
-        print(f"⬇️ 嘗試下載圖片: {raw_url}")
-        resp = requests.get(raw_url, timeout=8, verify=False, stream=True)
+        # print(f"⬇️ 嘗試下載圖片: {raw_url}") # Debug用，不想洗版可註解
+        resp = requests.get(raw_url, headers=headers, timeout=5, verify=False, stream=True)
         resp.raise_for_status()
+        
+        # --- [關鍵修改] 嚴格檢查這是不是一張圖片 ---
+        content_type = resp.headers.get("Content-Type", "").lower()
+        if "image" not in content_type:
+            print(f"⚠️ 下載到的不是圖片，而是: {content_type} (URL: {raw_url})")
+            return None
+        # ---------------------------------------
+
     except Exception as e:
-        print(f"❌ 下載圖片失敗: {e}")
+        # print(f"❌ 下載圖片失敗: {e}") 
         return None
 
     # 判斷副檔名
-    content_type = resp.headers.get("Content-Type", "").lower()
     ext = ".jpg"
     if "png" in content_type:
         ext = ".png"
-    elif "jpeg" in content_type or "jpg" in content_type:
-        ext = ".jpg"
     elif "webp" in content_type:
         ext = ".webp"
+    elif "gif" in content_type:
+        ext = ".gif"
 
-    # 用 URL 做 hash 當檔名（避免重複）
+    # 用 URL hash 當檔名
     h = hashlib.md5(raw_url.encode("utf-8")).hexdigest()
     filename = f"{h}{ext}"
     filepath = os.path.join(STATIC_IMAGE_DIR, filename)
 
     # 已經抓過就不重抓
     if os.path.exists(filepath):
-        print(f"📁 圖片已存在，直接使用快取: {filepath}")
-    else:
-        try:
-            with open(filepath, "wb") as f:
-                for chunk in resp.iter_content(8192):
-                    if chunk:
-                        f.write(chunk)
-            print(f"✅ 圖片已儲存: {filepath}")
-        except Exception as e:
-            print(f"❌ 寫入圖片檔案失敗: {e}")
-            return None
+        return f"{BASE_URL}/static/search_images/{filename}"
 
-    # 回傳給 LINE 用的 HTTPS URL
-    return f"{BASE_URL}/static/search_images/{filename}"
+    try:
+        with open(filepath, "wb") as f:
+            for chunk in resp.iter_content(8192):
+                if chunk:
+                    f.write(chunk)
+        # print(f"✅ 圖片已儲存: {filepath}")
+        return f"{BASE_URL}/static/search_images/{filename}"
+        
+    except Exception as e:
+        print(f"❌ 寫入檔案失敗: {e}")
+        return None
 
 def sanitize_image_url(raw_url: str) -> str | None:
     """清洗 & 驗證圖片 URL，只允許 http / https"""
