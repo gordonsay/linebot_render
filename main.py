@@ -3699,72 +3699,48 @@ def search_twitter_images_list(query, count=1):
     return process_and_cache_urls(query, raw_urls, max_count=count)
 
 def search_instagram_rapidapi(keyword, count=3):
-    """
-    使用 RapidAPI (Instagram Scraper 2022) 搜尋 IG
-    適配 'sections' -> 'medias' -> 'media' 的 JSON 結構
-    """
-    # 1. 設定 API (請確認您的 RapidAPI Host 是這一個)
-    # 如果是搜尋關鍵字，通常 Endpoint 是 /ig/search_text
+    """ IG 搜尋 (RapidAPI) """
     url = "https://instagram-scraper-2022.p.rapidapi.com/ig/search_text"
-    
-    querystring = {
-        "search_query": keyword,
-        "section": "top" # 抓取「熱門」區塊，圖片品質較好
-    }
-
+    querystring = {"search_query": keyword, "section": "top"}
     headers = {
         "x-rapidapi-key": os.getenv('RAPIDAPI_KEY'),
         "x-rapidapi-host": "instagram-scraper-2022.p.rapidapi.com"
     }
 
-    raw_data_list = []
-
+    raw_data = []
     try:
-        print(f"🔍 開始 IG RapidAPI 搜尋: {keyword}")
         response = requests.get(url, headers=headers, params=querystring, timeout=15)
-        data = response.json()
-        
-        # ==========================================
-        # 🧩 JSON 解析邏輯 (針對您提供的結構)
-        # ==========================================
-        sections = data.get("sections", [])
-        
-        for section in sections:
-            # 進入 layout_content -> medias
-            layout_content = section.get("layout_content", {})
-            medias = layout_content.get("medias", [])
-            
-            for item in medias:
-                # 取得真正的媒體物件
-                media = item.get("media", {})
-                
-                # 1. 提取圖片 URL
-                # 無論是 Video(2), Image(1), Carousel(8)，都有 image_versions2
-                img_url = None
-                image_versions = media.get("image_versions2", {})
-                candidates = image_versions.get("candidates", [])
-                
-                if candidates:
-                    # candidates[0] 通常是最高畫質
-                    img_url = candidates[0].get("url")
-                
-                # 2. 提取貼文代碼 (Code) 來組合成連結
-                code = media.get("code")
-                post_link = f"https://www.instagram.com/p/{code}/" if code else None
-                
-                # 3. 確保有圖才加入
-                if img_url:
-                    raw_data_list.append({
-                        "img": img_url,
-                        "link": post_link
-                    })
+        if response.status_code == 200:
+            data = response.json()
+            sections = data.get("sections", [])
+            for section in sections:
+                layout_content = section.get("layout_content", {})
+                medias = layout_content.get("medias", [])
+                for item in medias:
+                    media = item.get("media", {})
+                    
+                    # 找圖
+                    img_url = None
+                    candidates = media.get("image_versions2", {}).get("candidates", [])
+                    if candidates: img_url = candidates[0].get("url")
+                    
+                    # 找 Carousel 圖
+                    if not img_url and "carousel_media" in media:
+                        car = media.get("carousel_media", [])
+                        if car and car[0].get("image_versions2"):
+                            img_url = car[0]["image_versions2"]["candidates"][0].get("url")
 
+                    # 找連結
+                    code = media.get("code")
+                    post_link = f"https://www.instagram.com/p/{code}/" if code else img_url
+                    
+                    if img_url:
+                        raw_data.append({"img": img_url, "link": post_link})
+                        
     except Exception as e:
-        print(f"❌ IG API Error: {e}")
-        return []
+        print(f"IG Error: {e}")
 
-    # 丟給通用邏輯處理 (清洗、去重、下載)
-    return process_and_cache_urls(keyword, raw_data_list, max_count=count)
+    return process_and_cache_urls(keyword, raw_data, max_count=count)
 
 
 def cache_image_to_local(raw_url: str) -> str | None:
