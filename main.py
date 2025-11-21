@@ -3700,16 +3700,21 @@ def search_twitter_images_list(query, count=1):
 
 def search_instagram_rapidapi(keyword, count=3):
     """
-    [新版] 使用 RapidAPI (Instagram Scraper 20224) 搜尋
+    [修正版] 使用 RapidAPI (Instagram Scraper 20224)
+    修正點：只取第一個關鍵字作為 Hashtag，避免搜尋字串過長導致 500 錯誤
     """
-    # 1. 注意：Host 變成了 20224
+    # 1. Host 設定 (確認是用 20224)
     host = "instagram-scraper-20224.p.rapidapi.com"
     url = f"https://{host}/ig/hashtag/"
     
-    # 處理關鍵字 (移除空格)
-    tag = keyword.replace(" ", "")
+    # 2. [關鍵修改] 處理關鍵字
+    # 原本: tag = keyword.replace(" ", "") -> 變成 "河北彩花性感寫真" (錯誤)
+    # 修改: 用 split() 切割，只拿第一個詞 -> 變成 "河北彩花" (正確)
+    if not keyword: return []
+    tag = keyword.split()[0] 
     
-    querystring = {"hashtag": tag, "tabs": "top_posts"} # 改用 top_posts 抓熱門圖
+    # 3. 設定參數 (加上 tabs="top_posts" 抓熱門)
+    querystring = {"hashtag": tag, "tabs": "top_posts"}
 
     headers = {
         "x-rapidapi-key": os.getenv('RAPIDAPI_KEY'),
@@ -3719,19 +3724,19 @@ def search_instagram_rapidapi(keyword, count=3):
     raw_data_list = []
 
     try:
-        print(f"🔍 [IG] 開始搜尋 Hashtag: #{tag}")
+        print(f"🔍 [IG] 嘗試搜尋 Hashtag: #{tag}")
         response = requests.get(url, headers=headers, params=querystring, timeout=15)
         
+        # 檢查 API 狀態
         if response.status_code != 200:
             print(f"❌ [IG] API 請求失敗: {response.status_code} - {response.text[:100]}")
+            # 如果失敗，不要崩潰，回傳空陣列讓 Google 補位
             return []
 
         data = response.json()
         
-        # 解析邏輯 (根據這個 API 的回傳結構)
-        # 結構通常是 data -> body -> sections -> ...
-        # 這裡做一個通用的解析嘗試
-        
+        # 4. 解析邏輯 (依照這家 API 的結構)
+        # 路徑: data -> body -> sections -> ...
         body = data.get("data", {}).get("body", {})
         sections = body.get("sections", [])
         
@@ -3742,18 +3747,17 @@ def search_instagram_rapidapi(keyword, count=3):
             for item in medias:
                 media = item.get("media", {})
                 
-                # 找圖片
+                # 找圖片 (image_versions2)
                 img_url = None
-                
-                # 優先找 image_versions2
                 candidates = media.get("image_versions2", {}).get("candidates", [])
                 if candidates:
                     img_url = candidates[0].get("url")
                 
                 # 如果是輪播 (Carousel)，找第一張
                 if not img_url and "carousel_media" in media:
-                     if media["carousel_media"]:
-                        c_candidates = media["carousel_media"][0].get("image_versions2", {}).get("candidates", [])
+                     car = media.get("carousel_media", [])
+                     if car:
+                        c_candidates = car[0].get("image_versions2", {}).get("candidates", [])
                         if c_candidates:
                             img_url = c_candidates[0].get("url")
 
@@ -3771,10 +3775,10 @@ def search_instagram_rapidapi(keyword, count=3):
         print(f"❌ [IG] 程式執行錯誤: {e}")
         return []
 
-    print(f"🔍 [IG] 找到 {len(raw_data_list)} 張圖片")
+    print(f"🔍 [IG] 成功找到 {len(raw_data_list)} 張圖片")
     
+    # 5. 丟給通用邏輯處理
     return process_and_cache_urls(keyword, raw_data_list, max_count=count)
-
 
 def cache_image_to_local(raw_url: str) -> str | None:
     """
