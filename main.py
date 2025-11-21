@@ -3585,7 +3585,7 @@ def get_mixed_source_images(keyword):
     # 我們多抓一點備用 (Google 抓 5 張, Twitter 抓 3 張, IG 抓 3 張)
     google_list = search_google_images_list(keyword, count=5)
     twitter_list = search_twitter_images_list(keyword, count=3)
-    ig_list = search_instagram_images_list(keyword, count=3)
+    ig_list = search_instagram_rapidapi(keyword, count=3)
 
     final_images = []
 
@@ -3731,38 +3731,52 @@ def search_twitter_images_list(query, count=1):
     # 丟給通用邏輯處理下載 (Twitter 圖片通常下載很順)
     return process_and_cache_urls(query, raw_urls, max_count=count)
 
-def search_instagram_images_list(query, count=1):
-    """ 
-    IG 搜尋 (透過 Google 繞道)，回傳指定數量的本機 URL 列表 
-    注意：這會搜尋到 IG 的貼文預覽圖，下載後可能解析度較低，但能用。
+def search_instagram_rapidapi(keyword, count=3):
     """
-    search_url = "https://www.googleapis.com/customsearch/v1"
-    # 關鍵：加上 site:instagram.com
-    ig_query = f"{query} site:instagram.com"
+    [推薦] 使用 RapidAPI 專門的 IG Scraper
+    針對關鍵字搜尋 Hashtag，並取得高畫質圖片
+    """
+    # 1. 處理關鍵字：IG Hashtag 不能有空格，把空格去掉
+    tag = keyword.replace(" ", "")
     
-    params = {
-        "q": ig_query,
-        "cx": GOOGLE_CX,
-        "key": GOOGLE_SEARCH_KEY,
-        "searchType": "image",
-        "num": 10,
-        "safe": "off",
+    url = "https://instagram-scraper-2022.p.rapidapi.com/ig/hashtag_medias"
+    
+    querystring = {
+        "hashtag": tag, 
+        "limit": "15" # 一次抓 15 張回來挑
+    }
+
+    headers = {
+        "x-rapidapi-key": os.getenv('RAPIDAPI_KEY'),
+        "x-rapidapi-host": "instagram-scraper-2022.p.rapidapi.com" # 請確認您訂閱的 API Host 是這一個
     }
 
     raw_urls = []
     try:
-        print(f"🔍 開始 IG (Google) 搜尋: {ig_query}")
-        response = requests.get(search_url, params=params, timeout=6)
+        print(f"🔍 開始 IG RapidAPI 搜尋 Hashtag: #{tag}")
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
         data = response.json()
         
-        if "items" in data:
-            raw_urls = [item.get("link") for item in data["items"]]
-            
-    except Exception as e:
-        print(f"❌ IG Search Error: {e}")
+        # 解析 JSON (結構依不同 API 會有差異，這是 instagram-scraper-2022 的結構)
+        # 通常路徑是: data -> hashtag -> edge_hashtag_to_media -> edges -> node -> display_url
+        
+        # 為了防止 API 結構變更導致 crash，多加保護
+        edges = data.get("data", {}).get("hashtag", {}).get("edge_hashtag_to_media", {}).get("edges", [])
+        
+        for edge in edges:
+            node = edge.get("node", {})
+            # 確保不是影片 (is_video: false) 或者是影片但有封面圖
+            image_url = node.get("display_url")
+            if image_url:
+                raw_urls.append(image_url)
 
-    # 丟給通用邏輯處理
-    return process_and_cache_urls(query, raw_urls, max_count=count)
+    except Exception as e:
+        print(f"❌ IG API Error: {e}")
+        # 如果 IG API 失敗，回傳空列表，系統會自動用 Google 圖補位
+        return []
+
+    # 丟給通用邏輯處理 (清洗、去重、下載)
+    return process_and_cache_urls(keyword, raw_urls, max_count=count)
 
 
 def cache_image_to_local(raw_url: str) -> str | None:
