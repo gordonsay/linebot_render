@@ -1521,37 +1521,26 @@ def handle_message(event):
         search_query = user_message.replace("狗蛋搜圖", "").strip()
 
         if not search_query:
-            reply_text = "請提供要搜尋的內容，例如：狗蛋搜圖 柴犬"
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=reply_text)]
-                )
-            )
-            return
-
-        # 1. 獲取圖片 (包含自動補位邏輯)
-        # 這裡會呼叫我們上面寫好的 get_mixed_source_images
-        mixed_images = get_mixed_source_images(search_query)
-
-        if mixed_images:
-            # 2. 製作 Flex Message
-            flex_msg = create_3_source_flex(search_query, mixed_images)
-            
-            # 3. 回傳
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[flex_msg]
-                )
-            )
+            # 如果沒輸入關鍵字
+            messages = [TextMessage(text="請提供要搜尋的內容，例如：狗蛋搜圖 柴犬")]
         else:
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=f"找不到 {search_query} 的相關圖片 😢")]
-                )
-            )
+            # 1. 獲取圖片 (呼叫我們剛寫好的 get_mixed_source_images)
+            mixed_images = get_mixed_source_images(search_query)
+
+            if mixed_images:
+                # 2. 有圖片 -> 製作 Flex Message
+                flex_msg = create_3_source_flex(search_query, mixed_images)
+                messages = [flex_msg]
+            else:
+                # 3. 沒圖片 -> 回傳文字提示
+                messages = [TextMessage(text=f"找不到 {search_query} 的相關圖片 😢")]
+
+        # 4. 統一發送 (Align 您的 send_response 風格)
+        reply_request = ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=messages
+        )
+        send_response(event, reply_request)
         return
     
     # (4-h)狗蛋唱歌 Spotify link
