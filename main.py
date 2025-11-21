@@ -3598,7 +3598,7 @@ def get_mixed_source_images(keyword):
         final_images.append({"source": "Twitter", "url": twitter_list[0], "color": "#000000"})
     elif len(google_list) > 1: 
         # Twitter 沒圖，拿 Google 第 2 張補
-        final_images.append({"source": "Google (補)", "url": google_list[1], "color": "#4285F4"})
+        final_images.append({"source": "Google", "url": google_list[1], "color": "#4285F4"})
 
     # --- 第三張：Instagram ---
     if len(ig_list) > 0:
@@ -3609,7 +3609,7 @@ def get_mixed_source_images(keyword):
         used_google_count = 1 + (1 if len(twitter_list) == 0 else 0)
         
         if len(google_list) > used_google_count:
-            final_images.append({"source": "Google (補)", "url": google_list[used_google_count], "color": "#4285F4"})
+            final_images.append({"source": "Google", "url": google_list[used_google_count], "color": "#4285F4"})
 
     return final_images
 
@@ -3663,7 +3663,7 @@ def search_google_images_list(query, count=1):
         "cx": GOOGLE_CX,
         "key": GOOGLE_SEARCH_KEY,
         "searchType": "image",
-        "num": 10, # 一次抓 10 張來篩選
+        "num": 5, # 一次抓 10 張來篩選
         "imgSize": "xlarge",
         "fileType": "jpg,png",
         "safe": "off",
