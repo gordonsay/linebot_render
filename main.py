@@ -1520,21 +1520,37 @@ def handle_message(event):
         search_query = user_message.replace("狗蛋搜圖", "").strip()
 
         if not search_query:
-            reply_text = "請提供要搜尋的內容，例如：狗蛋搜圖 日本女星"
-            messages = [TextMessage(text=reply_text)]
+            reply_text = "請提供要搜尋的內容，例如：狗蛋搜圖 柴犬"
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=reply_text)]
+                )
+            )
+            return
+
+        # 1. 獲取圖片 (包含自動補位邏輯)
+        # 這裡會呼叫我們上面寫好的 get_mixed_source_images
+        mixed_images = get_mixed_source_images(search_query)
+
+        if mixed_images:
+            # 2. 製作 Flex Message
+            flex_msg = create_3_source_flex(search_query, mixed_images)
+            
+            # 3. 回傳
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[flex_msg]
+                )
+            )
         else:
-            image_url = search_google_image(search_query)
-
-            if image_url:
-                messages = [create_flex_message(f"「{search_query}」的圖片 🔍", image_url)]
-            else:
-                messages = [TextMessage(text=f"找不到 {search_query} 的相關圖片 😢")]
-
-        reply_request = ReplyMessageRequest(
-            replyToken=event.reply_token,
-            messages=messages
-        )
-        send_response(event, reply_request)
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=f"找不到 {search_query} 的相關圖片 😢")]
+                )
+            )
         return
     
     # (4-h)狗蛋唱歌 Spotify link
@@ -3483,6 +3499,56 @@ def search_person_info(name):
 
     return response_text, image_url
 
+def create_3_source_flex(keyword, images):
+    """
+    生成包含 3 個 Bubble 的 Carousel
+    """
+    bubbles = []
+    
+    for item in images:
+        bubble = {
+            "type": "bubble",
+            "size": "micro",  # 使用 micro 或 nano 讓三張圖在手機上容易滑動瀏覽
+            "hero": {
+                "type": "image",
+                "url": item["url"],
+                "size": "full",
+                "aspectMode": "cover",
+                "aspectRatio": "3:4", # 直式比例比較適合看圖
+                "action": {
+                    "type": "uri",
+                    "uri": item["url"] # 點擊看大圖
+                }
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "backgroundColor": item["color"],
+                "paddingAll": "xs",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": item["source"],
+                        "color": "#FFFFFF",
+                        "size": "xs",
+                        "align": "center",
+                        "weight": "bold"
+                    }
+                ]
+            }
+        }
+        bubbles.append(bubble)
+
+    carousel = {
+        "type": "carousel",
+        "contents": bubbles
+    }
+    
+    return FlexMessage(
+        alt_text=f"這是「{keyword}」的搜尋結果",
+        contents=FlexContainer.from_json(json.dumps(carousel))
+    )
+
 def create_flex_message(text, image_url):
     """建立 Flex Message，確保圖片可顯示"""
     if not image_url or not image_url.startswith("http"):
@@ -3519,6 +3585,195 @@ def create_flex_message(text, image_url):
     flex_json_str = json.dumps(flex_content)
     flex_contents = FlexContainer.from_json(flex_json_str)
     return FlexMessage(alt_text=text, contents=flex_contents)
+
+def get_mixed_source_images(keyword):
+    """
+    整合函數：取得 [Google圖, Twitter圖, IG圖] 的本機快取 URL
+    若某來源不足，會自動用 Google 的圖補位
+    """
+    # 1. 平行或依序抓取資料 (這裡為了簡單用依序，若想快可用 ThreadPool)
+    # 我們多抓一點備用 (Google 抓 5 張, Twitter 抓 3 張, IG 抓 3 張)
+    google_list = search_google_images_list(keyword, count=5)
+    twitter_list = search_twitter_images_list(keyword, count=3)
+    ig_list = search_instagram_images_list(keyword, count=3)
+
+    final_images = []
+
+    # --- 第一張：Google (主力) ---
+    if len(google_list) > 0:
+        final_images.append({"source": "Google", "url": google_list[0], "color": "#4285F4"})
+    
+    # --- 第二張：Twitter (X) ---
+    if len(twitter_list) > 0:
+        final_images.append({"source": "Twitter", "url": twitter_list[0], "color": "#000000"})
+    elif len(google_list) > 1: 
+        # Twitter 沒圖，拿 Google 第 2 張補
+        final_images.append({"source": "Google (補)", "url": google_list[1], "color": "#4285F4"})
+
+    # --- 第三張：Instagram ---
+    if len(ig_list) > 0:
+        final_images.append({"source": "Instagram", "url": ig_list[0], "color": "#E1306C"})
+    else:
+        # IG 沒圖，拿 Google 剩餘的圖補
+        # 計算 Google 用掉幾張了 (第一張肯定用了，如果 Twitter 沒圖也用了一張)
+        used_google_count = 1 + (1 if len(twitter_list) == 0 else 0)
+        
+        if len(google_list) > used_google_count:
+            final_images.append({"source": "Google (補)", "url": google_list[used_google_count], "color": "#4285F4"})
+
+    return final_images
+
+def process_and_cache_urls(query, raw_urls, max_count=1):
+    """
+    通用函數：傳入一批原始 URL 列表，回傳下載成功且未重複的本機 URL 列表
+    """
+    valid_local_urls = []
+    
+    # 🚫 通用過濾名單 (針對非特定來源的搜尋)
+    # 如果是專門搜 IG 的函數，我們就不會過濾 instagram.com
+    BLOCK_DOMAINS = ["fbcdn.net", "facebook.com"] 
+
+    for raw_url in raw_urls:
+        if len(valid_local_urls) >= max_count:
+            break
+            
+        if not raw_url: continue
+
+        # 1. 檢查是否重複
+        if is_image_used(query, raw_url):
+            print(f"⚠️ [重複] 圖片已使用過: {raw_url}")
+            continue
+
+        # 2. 基本清洗
+        image_url = sanitize_image_url(raw_url)
+        if not image_url: continue
+        
+        # 3. 簡單過濾 (可選)
+        if any(domain in image_url for domain in BLOCK_DOMAINS):
+            continue
+
+        # 4. 下載圖片 (使用你原本的函數)
+        cached_url = cache_image_to_local(image_url)
+        
+        if cached_url:
+            # 5. 標記為已使用
+            mark_image_used(query, raw_url)
+            valid_local_urls.append(cached_url)
+            print(f"✅ [成功] 圖片已快取: {cached_url}")
+        else:
+            print(f"❌ [失敗] 圖片下載失敗: {raw_url}")
+
+    return valid_local_urls
+
+def search_google_images_list(query, count=1):
+    """ Google 搜尋，回傳指定數量的本機 URL 列表 """
+    search_url = "https://www.googleapis.com/customsearch/v1"
+    params = {
+        "q": query,
+        "cx": GOOGLE_CX,
+        "key": GOOGLE_SEARCH_KEY,
+        "searchType": "image",
+        "num": 10, # 一次抓 10 張來篩選
+        "imgSize": "xlarge",
+        "fileType": "jpg,png",
+        "safe": "off",
+    }
+
+    raw_urls = []
+    try:
+        response = requests.get(search_url, params=params, timeout=6)
+        response.raise_for_status()
+        data = response.json()
+        
+        if "items" in data:
+            # 提取所有原始連結
+            raw_urls = [item.get("link") for item in data["items"]]
+            
+    except Exception as e:
+        print(f"❌ Google API Error: {e}")
+        
+    # 丟給通用邏輯處理下載
+    return process_and_cache_urls(query, raw_urls, max_count=count)
+
+def search_twitter_images_list(query, count=1):
+    """ Twitter 搜尋，回傳指定數量的本機 URL 列表 """
+    url = "https://twitter241.p.rapidapi.com/search-v2"
+    querystring = {"query": f"{query} filter:images", "type": "Top", "count": "20"}
+    
+    headers = {
+        "x-rapidapi-key": os.getenv('RAPIDAPI_KEY'), # 記得在環境變數設定
+        "x-rapidapi-host": "twitter241.p.rapidapi.com"
+    }
+
+    raw_urls = []
+    try:
+        print(f"🔍 開始 Twitter 搜尋: {query}")
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        data = response.json()
+        
+        # 解析 JSON (這段邏輯沿用我們之前測試成功的結構)
+        instructions = data.get('result', {}).get('timeline', {}).get('instructions', [])
+        entries = []
+        for instruction in instructions:
+            if instruction.get('type') == 'TimelineAddEntries':
+                entries = instruction.get('entries', [])
+                break
+        
+        for entry in entries:
+            try:
+                content = entry.get('content', {})
+                if content.get('entryType') != 'TimelineTimelineItem': continue
+                
+                legacy = content.get('itemContent', {}).get('tweet_results', {}).get('result', {}).get('legacy', {})
+                
+                # 找圖片
+                if 'extended_entities' in legacy and 'media' in legacy['extended_entities']:
+                    for media in legacy['extended_entities']['media']:
+                        if media.get('media_url_https'):
+                            raw_urls.append(media.get('media_url_https'))
+                            
+            except Exception:
+                continue
+                
+    except Exception as e:
+        print(f"❌ Twitter API Error: {e}")
+
+    # 丟給通用邏輯處理下載 (Twitter 圖片通常下載很順)
+    return process_and_cache_urls(query, raw_urls, max_count=count)
+
+def search_instagram_images_list(query, count=1):
+    """ 
+    IG 搜尋 (透過 Google 繞道)，回傳指定數量的本機 URL 列表 
+    注意：這會搜尋到 IG 的貼文預覽圖，下載後可能解析度較低，但能用。
+    """
+    search_url = "https://www.googleapis.com/customsearch/v1"
+    # 關鍵：加上 site:instagram.com
+    ig_query = f"{query} site:instagram.com"
+    
+    params = {
+        "q": ig_query,
+        "cx": GOOGLE_CX,
+        "key": GOOGLE_SEARCH_KEY,
+        "searchType": "image",
+        "num": 10,
+        "safe": "off",
+    }
+
+    raw_urls = []
+    try:
+        print(f"🔍 開始 IG (Google) 搜尋: {ig_query}")
+        response = requests.get(search_url, params=params, timeout=6)
+        data = response.json()
+        
+        if "items" in data:
+            raw_urls = [item.get("link") for item in data["items"]]
+            
+    except Exception as e:
+        print(f"❌ IG Search Error: {e}")
+
+    # 丟給通用邏輯處理
+    return process_and_cache_urls(query, raw_urls, max_count=count)
+
 
 def cache_image_to_local(raw_url: str) -> str | None:
     """
