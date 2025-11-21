@@ -3699,48 +3699,81 @@ def search_twitter_images_list(query, count=1):
     return process_and_cache_urls(query, raw_urls, max_count=count)
 
 def search_instagram_rapidapi(keyword, count=3):
-    """ IG 搜尋 (RapidAPI) """
-    url = "https://instagram-scraper-2022.p.rapidapi.com/ig/search_text"
-    querystring = {"search_query": keyword, "section": "top"}
+    """
+    [新版] 使用 RapidAPI (Instagram Scraper 20224) 搜尋
+    """
+    # 1. 注意：Host 變成了 20224
+    host = "instagram-scraper-20224.p.rapidapi.com"
+    url = f"https://{host}/ig/hashtag/"
+    
+    # 處理關鍵字 (移除空格)
+    tag = keyword.replace(" ", "")
+    
+    querystring = {"hashtag": tag, "tabs": "top_posts"} # 改用 top_posts 抓熱門圖
+
     headers = {
         "x-rapidapi-key": os.getenv('RAPIDAPI_KEY'),
-        "x-rapidapi-host": "instagram-scraper-2022.p.rapidapi.com"
+        "x-rapidapi-host": host
     }
 
-    raw_data = []
+    raw_data_list = []
+
     try:
+        print(f"🔍 [IG] 開始搜尋 Hashtag: #{tag}")
         response = requests.get(url, headers=headers, params=querystring, timeout=15)
-        if response.status_code == 200:
-            data = response.json()
-            sections = data.get("sections", [])
-            for section in sections:
-                layout_content = section.get("layout_content", {})
-                medias = layout_content.get("medias", [])
-                for item in medias:
-                    media = item.get("media", {})
-                    
-                    # 找圖
-                    img_url = None
-                    candidates = media.get("image_versions2", {}).get("candidates", [])
-                    if candidates: img_url = candidates[0].get("url")
-                    
-                    # 找 Carousel 圖
-                    if not img_url and "carousel_media" in media:
-                        car = media.get("carousel_media", [])
-                        if car and car[0].get("image_versions2"):
-                            img_url = car[0]["image_versions2"]["candidates"][0].get("url")
+        
+        if response.status_code != 200:
+            print(f"❌ [IG] API 請求失敗: {response.status_code} - {response.text[:100]}")
+            return []
 
-                    # 找連結
-                    code = media.get("code")
-                    post_link = f"https://www.instagram.com/p/{code}/" if code else img_url
-                    
-                    if img_url:
-                        raw_data.append({"img": img_url, "link": post_link})
-                        
+        data = response.json()
+        
+        # 解析邏輯 (根據這個 API 的回傳結構)
+        # 結構通常是 data -> body -> sections -> ...
+        # 這裡做一個通用的解析嘗試
+        
+        body = data.get("data", {}).get("body", {})
+        sections = body.get("sections", [])
+        
+        for section in sections:
+            layout_content = section.get("layout_content", {})
+            medias = layout_content.get("medias", [])
+            
+            for item in medias:
+                media = item.get("media", {})
+                
+                # 找圖片
+                img_url = None
+                
+                # 優先找 image_versions2
+                candidates = media.get("image_versions2", {}).get("candidates", [])
+                if candidates:
+                    img_url = candidates[0].get("url")
+                
+                # 如果是輪播 (Carousel)，找第一張
+                if not img_url and "carousel_media" in media:
+                     if media["carousel_media"]:
+                        c_candidates = media["carousel_media"][0].get("image_versions2", {}).get("candidates", [])
+                        if c_candidates:
+                            img_url = c_candidates[0].get("url")
+
+                # 找連結代碼
+                code = media.get("code")
+                post_link = f"https://www.instagram.com/p/{code}/" if code else None
+                
+                if img_url:
+                    raw_data_list.append({
+                        "img": img_url,
+                        "link": post_link
+                    })
+
     except Exception as e:
-        print(f"IG Error: {e}")
+        print(f"❌ [IG] 程式執行錯誤: {e}")
+        return []
 
-    return process_and_cache_urls(keyword, raw_data, max_count=count)
+    print(f"🔍 [IG] 找到 {len(raw_data_list)} 張圖片")
+    
+    return process_and_cache_urls(keyword, raw_data_list, max_count=count)
 
 
 def cache_image_to_local(raw_url: str) -> str | None:
