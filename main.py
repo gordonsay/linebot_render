@@ -56,6 +56,7 @@ GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 
 # 初始化 Spotipy
 spotify_auth = SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET)
